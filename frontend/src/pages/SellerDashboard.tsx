@@ -1,14 +1,41 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
-import type { product } from "../types/product";
+import type { Product } from "../types/product";
 import CreateProductForm from "../components/CreateProductForm";
 
 function SellerDashboard() {
-  const { profile } = useAuth();
-
-  const [products, setProducts] = useState<product[]>([]);
+  const { profile, user } = useAuth();
+  const navigate = useNavigate();
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleGoLive = async (productId: string) => {
+    if (!user) {
+      alert("You must be logged in to go live.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("live_sessions")
+      .insert({
+        host_id: user.id,
+        product_id: productId,
+        status: "live",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to start live:", error);
+      alert("Failed to start live session.");
+      return;
+    }
+
+    console.log("Live session created:", data);
+    navigate(`/live/${data.live_id}`);
+  };
 
   async function fetchProducts() {
     if (!profile) return;
@@ -59,11 +86,18 @@ function SellerDashboard() {
             <p>{product.description}</p>
             <p>Price: ${product.price}</p>
             <p>Stock: {product.stock}</p>
+            <button onClick={() => handleGoLive(product.id)}>Go Live</button>
           </div>
         ))
       )}
     </div>
   );
 }
+
+const {
+  data: { session },
+} = await supabase.auth.getSession();
+
+console.log(session?.access_token);
 
 export default SellerDashboard;

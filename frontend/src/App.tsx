@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import SellerDashboard from "./pages/SellerDashboard";
 import CustomerHome from "./pages/CustomerHome";
 import ProtectedRoute from "./components/ProtectedRoute";
+import LiveSession from "./pages/LiveSession";
 
 function App() {
   return (
@@ -17,6 +18,14 @@ function App() {
           element={
             <ProtectedRoute allowedRole="seller">
               <SellerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/live/:liveId"
+          element={
+            <ProtectedRoute allowedRole="seller">
+              <LiveSession />
             </ProtectedRoute>
           }
         />

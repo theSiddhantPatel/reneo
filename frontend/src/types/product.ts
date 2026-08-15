@@ -1,4 +1,4 @@
-export type product = {
+export type Product = {
     id: string;
     seller_id: string;
     name: string;
@@ -8,4 +8,4 @@ export type product = {
     stock: number;
     status: string;
     created_at: string;
-};
+}; 

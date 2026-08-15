@@ -4,14 +4,15 @@ import type { User } from "@supabase/supabase-js";
 
 import { getCurrentUser, getCurrentProfile, signOut } from "../lib/auth";
 import { supabase } from "../lib/supabase";
-type Profile = {
-  id: string;
-  name: string;
-  avatar: string | null;
-  role: "seller" | "customer";
-  created_at: string;
-};
+// type Profile = {
+//   id: string;
+//   name: string;
+//   avatar: string | null;
+//   role: "seller" | "customer";
+//   created_at: string;
+// };
 
+import type { Profile } from "../types/profile";
 type AuthContextType = {
   user: User | null;
   profile: Profile | null;
