@@ -72,6 +72,11 @@ function LiveSession() {
   // Live Floating Emoji Reactions State
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
 
+  // Product Switcher State (Multi-Product Showcase - Part B)
+  const [isProductSwitcherOpen, setIsProductSwitcherOpen] = useState(false);
+  const [sellerInventory, setSellerInventory] = useState<Product[]>([]);
+  const [isSwitchingProduct, setIsSwitchingProduct] = useState(false);
+
   // Product modal view state (inspect product without leaving stream)
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
 
@@ -559,6 +564,45 @@ function LiveSession() {
     }, 3200);
   }
 
+  // Switch Featured Product Live (Multi-Product Showcase - Part B)
+  async function handleSwitchFeaturedProduct(newProduct: Product) {
+    if (!liveId || newProduct.id === product?.id) return;
+
+    setIsSwitchingProduct(true);
+    try {
+      // 1. Optimistically update product state locally
+      setProduct(newProduct);
+      setIsProductSwitcherOpen(false);
+
+      // 2. Broadcast switch event to all connected customers in sub-30ms
+      if (liveChannelRef.current) {
+        liveChannelRef.current.send({
+          type: "broadcast",
+          event: "featured_product_switched",
+          payload: newProduct,
+        });
+      }
+
+      // 3. Persist new product_id in Postgres live_sessions table
+      const { error: updateErr } = await supabase
+        .from("live_sessions")
+        .update({ product_id: newProduct.id })
+        .eq("live_id", liveId);
+
+      if (updateErr) {
+        console.error("Failed to update featured product in database:", updateErr);
+      }
+
+      setInfo(`Pinned "${newProduct.name}" as the active featured product!`);
+      setTimeout(() => setInfo(""), 4000);
+    } catch (err) {
+      console.error("Failed to switch featured product:", err);
+      setInfo("Failed to switch product.");
+    } finally {
+      setIsSwitchingProduct(false);
+    }
+  }
+
   // Fetch Live Session Details, Product, Seller, and Initial Chat
   useEffect(() => {
     async function fetchLiveSession() {
@@ -607,9 +651,9 @@ function LiveSession() {
         setProduct(joinedProduct);
       }
 
-      // 2. Fetch Host Profile, Product, and Messages in parallel as safety fallback
+      // 2. Fetch Host Profile, Product, Messages, and Seller's Product Inventory in parallel
       try {
-        const [productRes, sellerRes, rawChatRes] = await Promise.all([
+        const [productRes, sellerRes, rawChatRes, inventoryRes] = await Promise.all([
           !joinedProduct
             ? supabase
               .from("products")
@@ -627,10 +671,20 @@ function LiveSession() {
             .select("id, live_id, user_id, message, created_at")
             .eq("live_id", liveId)
             .order("created_at", { ascending: true }),
+          supabase
+            .from("products")
+            .select("*")
+            .eq("seller_id", sessionData.host_id)
+            .eq("status", "active")
+            .order("created_at", { ascending: false }),
         ]);
 
         if (productRes.data && productRes.data.length > 0) {
           setProduct(productRes.data[0]);
+        }
+
+        if (inventoryRes.data) {
+          setSellerInventory(inventoryRes.data);
         }
 
         if (sellerRes.data && sellerRes.data.length > 0 && sellerRes.data[0]?.name) {
@@ -908,6 +962,14 @@ function LiveSession() {
           }, 3200);
         }
       })
+      .on("broadcast", { event: "featured_product_switched" }, (payload) => {
+        const newProduct = payload.payload as Product;
+        if (newProduct?.id) {
+          setProduct(newProduct);
+          setInfo(`Featured product updated: "${newProduct.name}"!`);
+          setTimeout(() => setInfo(""), 4500);
+        }
+      })
       .on("broadcast", { event: "stream_ended" }, () => {
         setSession((prev) => (prev ? { ...prev, status: "ended" } : prev));
         setInfo("The live broadcast has ended.");
@@ -1083,9 +1145,28 @@ function LiveSession() {
 
         {info && <div className="toast-notification">{info}</div>}
 
-        {session.status === "ended" && (
+        {session.status === "ended" && profile?.role === "customer" && (
           <div className="alert alert-warning" style={{ margin: "8px 0 16px" }}>
             This live stream has ended. You can still inspect the featured product and manage your cart.
+          </div>
+        )}
+
+        {session.status === "ended" && profile?.role === "seller" && (
+          <div
+            className="alert alert-warning"
+            style={{
+              margin: "8px 0 16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span>Your live broadcast has ended. Thank you for streaming!</span>
+            <Link to="/seller" className="btn-secondary btn-sm">
+              Return to Dashboard
+            </Link>
           </div>
         )}
 
@@ -1127,7 +1208,20 @@ function LiveSession() {
               {session.status === "ended" && (
                 <div className="video-ended-overlay">
                   <h3>Stream Ended</h3>
-                  <p>Thank you for watching!</p>
+                  <p>
+                    {profile?.role === "seller"
+                      ? "Thank you for streaming!"
+                      : "Thank you for watching!"}
+                  </p>
+                  {profile?.role === "seller" && (
+                    <Link
+                      to="/seller"
+                      className="btn-primary btn-sm"
+                      style={{ marginTop: 12 }}
+                    >
+                      Go to Dashboard
+                    </Link>
+                  )}
                 </div>
               )}
 
@@ -1328,7 +1422,18 @@ function LiveSession() {
             {/* Featured Product Card */}
             <div className={`panel-card product-showcase-card ${activeMobileTab !== "product" ? "mobile-hidden" : ""}`}>
               <div className="panel-header">
-                <h3>Featured Product</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h3>Featured Product</h3>
+                  {profile?.role === "seller" && session.status === "live" && sellerInventory.length > 1 && (
+                    <button
+                      onClick={() => setIsProductSwitcherOpen(true)}
+                      className="btn-switch-product-pill"
+                      title="Switch active featured product live"
+                    >
+                      🔄 Switch ({sellerInventory.length})
+                    </button>
+                  )}
+                </div>
                 <span className="stock-pill">
                   {product ? `${product.stock} available` : ""}
                 </span>
@@ -1570,6 +1675,83 @@ function LiveSession() {
                     Add to Cart (${product.price})
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* In-Stream Product Switcher Modal for Sellers (Part B) */}
+        {isProductSwitcherOpen && (
+          <div className="modal-backdrop" onClick={() => setIsProductSwitcherOpen(false)}>
+            <div className="modal-dialog modal-dialog-switcher" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h3>Switch Featured Product</h3>
+                  <p className="subtitle" style={{ fontSize: "0.82rem", marginTop: 2 }}>
+                    Pin any active product from your inventory to the live stream
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsProductSwitcherOpen(false)}
+                  className="btn-close-modal"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body switcher-modal-body">
+                {sellerInventory.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 24 }}>
+                    <p className="text-muted">No active products found in your inventory.</p>
+                  </div>
+                ) : (
+                  <div className="switcher-grid">
+                    {sellerInventory.map((item) => {
+                      const isCurrentlyPinned = item.id === product?.id;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`switcher-card ${isCurrentlyPinned ? "switcher-card-pinned" : ""}`}
+                        >
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="switcher-card-thumb"
+                            />
+                          ) : (
+                            <div className="switcher-card-placeholder">📦</div>
+                          )}
+
+                          <div className="switcher-card-info">
+                            <h4>{item.name}</h4>
+                            <div className="switcher-card-meta">
+                              <span className="switcher-card-price">${item.price}</span>
+                              <span className="switcher-card-stock">{item.stock} in stock</span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleSwitchFeaturedProduct(item)}
+                            disabled={isCurrentlyPinned || isSwitchingProduct}
+                            className={`btn-sm ${isCurrentlyPinned ? "btn-secondary" : "btn-primary"}`}
+                          >
+                            {isCurrentlyPinned ? "✓ Pinned" : "📌 Pin Live"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  onClick={() => setIsProductSwitcherOpen(false)}
+                  className="btn-secondary"
+                >
+                  Done
+                </button>
               </div>
             </div>
           </div>

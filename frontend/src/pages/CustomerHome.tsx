@@ -31,6 +31,8 @@ function CustomerHome() {
   const [cartLoading, setCartLoading] = useState(true);
   const [error, setError] = useState("");
   const [cartNotice, setCartNotice] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isCartFolded, setIsCartFolded] = useState(false);
 
   const totalCartCount = useMemo(
     () => cartItems.reduce((acc, item) => acc + item.quantity, 0),
@@ -45,6 +47,17 @@ function CustomerHome() {
       ),
     [cartItems],
   );
+
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery.trim()) return liveSessions;
+    const query = searchQuery.toLowerCase();
+    return liveSessions.filter(
+      (s) =>
+        s.products?.name.toLowerCase().includes(query) ||
+        s.products?.description?.toLowerCase().includes(query) ||
+        s.host_name?.toLowerCase().includes(query),
+    );
+  }, [liveSessions, searchQuery]);
 
   async function fetchLiveSessions() {
     setSessionLoading(true);
@@ -264,7 +277,7 @@ function CustomerHome() {
             </p>
           </div>
           <button onClick={() => { fetchLiveSessions(); fetchCart(); }} className="btn-secondary btn-sm">
-            Refresh
+            🔄 Refresh
           </button>
         </div>
 
@@ -274,11 +287,24 @@ function CustomerHome() {
         <div className="dashboard-grid">
           {/* Main Left: Active Live Broadcasts */}
           <section className="streams-section">
-            <div className="section-header">
-              <h2>Active Live Streams</h2>
-              <span className="live-count-badge">
-                {liveSessions.length} {liveSessions.length === 1 ? "Stream" : "Streams"} Live
-              </span>
+            <div className="inventory-header-bar">
+              <div className="section-header-left">
+                <h2>Active Live Streams ({filteredSessions.length})</h2>
+                <span className="live-count-badge">
+                  ● {liveSessions.length} {liveSessions.length === 1 ? "Stream" : "Streams"} Live
+                </span>
+              </div>
+
+              {/* Stream Search Bar */}
+              <div className="inventory-controls">
+                <input
+                  type="text"
+                  placeholder="🔍 Search live products, sellers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="inventory-search-input"
+                />
+              </div>
             </div>
 
             {sessionLoading ? (
@@ -286,15 +312,28 @@ function CustomerHome() {
                 <div className="spinner"></div>
                 <p>Finding live broadcasts...</p>
               </div>
-            ) : liveSessions.length === 0 ? (
+            ) : filteredSessions.length === 0 ? (
               <div className="empty-state card">
                 <div className="empty-icon">📺</div>
-                <h3>No Live Streams Right Now</h3>
-                <p>When a seller goes live, their stream and featured product will appear here automatically.</p>
+                <h3>{searchQuery ? "No Matching Live Streams" : "No Live Streams Right Now"}</h3>
+                <p>
+                  {searchQuery
+                    ? "Try searching for a different product or seller name."
+                    : "When a seller goes live, their stream and featured product will appear here automatically."}
+                </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="btn-secondary btn-sm"
+                    style={{ marginTop: 12 }}
+                  >
+                    Clear Search
+                  </button>
+                )}
               </div>
             ) : (
               <div className="products-grid">
-                {liveSessions.map((session) => {
+                {filteredSessions.map((session) => {
                   const prod = session.products;
                   const hostName = session.host_name ?? "Verified Seller";
 
@@ -323,7 +362,7 @@ function CustomerHome() {
                         )}
                         <div className="live-card-meta">
                           <span className="price-tag">${prod?.price ?? "0.00"}</span>
-                          <span className="stock-tag">
+                          <span className={`stock-tag ${prod && prod.stock < 1 ? "stock-out" : ""}`}>
                             {prod ? `${prod.stock} in stock` : ""}
                           </span>
                         </div>
@@ -347,7 +386,18 @@ function CustomerHome() {
             <div className="panel-card card">
               <div className="panel-header">
                 <h2>Your Shopping Cart</h2>
-                <span className="cart-total-badge">${cartTotal.toFixed(2)}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="cart-total-badge">${cartTotal.toFixed(2)}</span>
+                  {cartItems.length > 0 && (
+                    <button
+                      onClick={() => setIsCartFolded(!isCartFolded)}
+                      className="btn-fold-toggle"
+                      title={isCartFolded ? "Expand cart" : "Fold cart"}
+                    >
+                      {isCartFolded ? "▼ Expand" : "▲ Fold"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {cartLoading ? (
@@ -360,6 +410,13 @@ function CustomerHome() {
                   <div style={{ fontSize: 32, marginBottom: 8 }}>🛒</div>
                   <p><strong>Your cart is currently empty.</strong></p>
                   <small>Join a live broadcast and click "Add to Cart" to start shopping!</small>
+                </div>
+              ) : isCartFolded ? (
+                <div className="cart-folded-summary">
+                  <p>{totalCartCount} items in cart</p>
+                  <button onClick={() => setIsCartFolded(false)} className="btn-secondary btn-sm">
+                    View Items ({totalCartCount})
+                  </button>
                 </div>
               ) : (
                 <>
