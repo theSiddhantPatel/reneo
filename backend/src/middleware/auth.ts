@@ -66,7 +66,7 @@ export async function authenticateUser(
         // 7. Continue to the protected route
         next();
     } catch (error) {
-        console.error("Authentication middleware error:", error);
+        // console.error("Authentication middleware error:", error);
 
         return res.status(500).json({
             message: "Authentication service failed",

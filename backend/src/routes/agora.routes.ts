@@ -40,9 +40,9 @@ agoraRouter.post(
                 .select("role")
                 .eq("id", userId)
                 .single();
-            console.log("user id", userId);
-            console.log("Profile:", profile);
-            console.log("Profile error:", profileError);
+            // console.log("user id", userId);
+            // console.log("Profile:", profile);
+            // console.log("Profile error:", profileError);
 
             if (profileError || !profile) {
                 return res.status(404).json({
@@ -71,9 +71,9 @@ agoraRouter.post(
             }
 
             let role: "publisher" | "subscriber";
+            // Seller can only publish to their own live session
 
             if (profile.role === "seller") {
-                // Seller can only publish to their own live session
                 if (live.host_id !== userId) {
                     return res.status(403).json({
                         message: "You are not the host of this live session",
@@ -81,9 +81,12 @@ agoraRouter.post(
                 }
 
                 role = "publisher";
-            } else {
-                // Customer joins as audience
+            } else if (profile.role === "customer") {
                 role = "subscriber";
+            } else {
+                return res.status(403).json({
+                    message: "Invalid user role",
+                });
             }
 
             const token = generateAgoraToken(
@@ -100,7 +103,7 @@ agoraRouter.post(
                 role,
             });
         } catch (error) {
-            console.error("Agora token generation failed:", error);
+            //console.error("Agora token generation failed:", error);
 
             return res.status(500).json({
                 message: "Failed to generate Agora token",

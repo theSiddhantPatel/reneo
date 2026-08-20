@@ -74,7 +74,7 @@ function Signup() {
               <input
                 id="signup-name"
                 type="text"
-                placeholder="e.g. Amara Okafor"
+                placeholder="e.g. Siddhant Patel"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required

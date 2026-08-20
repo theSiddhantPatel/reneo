@@ -44,6 +44,7 @@ export async function endLiveSession(liveId: string) {
         headers: {
             Authorization: `Bearer ${accessToken}`,
         },
+        keepalive: true,
     });
 
     const data = await response.json();
@@ -54,3 +55,18 @@ export async function endLiveSession(liveId: string) {
 
     return data.liveSession;
 }
+
+export function endLiveSessionBeacon(liveId: string) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return;
+
+        fetch(`${BACKEND_URL}/api/live/${liveId}/end`, {
+            method: "PATCH",
+            headers: {
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            keepalive: true,
+        }).catch(() => {});
+    }).catch(() => {});
+}
+

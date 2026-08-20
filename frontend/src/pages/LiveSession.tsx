@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import AgoraRTC, {
   type ICameraVideoTrack,
   type IMicrophoneAudioTrack,
   type IRemoteVideoTrack,
+  type IRemoteAudioTrack,
   type IAgoraRTCRemoteUser,
 } from "agora-rtc-sdk-ng";
 import { useAuth } from "../contexts/AuthContext";
 import { joinAgoraChannel, agoraClient } from "../lib/agora";
 import { getAgoraToken } from "../lib/agoraApi";
-import { endLiveSession } from "../lib/liveApi";
+import { endLiveSession, endLiveSessionBeacon } from "../lib/liveApi";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
 import type { LiveSessionData } from "../types/liveSession";
@@ -36,6 +37,13 @@ type SellerProfile = {
   name: string | null;
 };
 
+type FloatingReaction = {
+  id: string;
+  emoji: string;
+  xOffset: number;
+  duration: number;
+};
+
 function formatTimestamp(isoString: string): string {
   try {
     const date = new Date(isoString);
@@ -47,6 +55,7 @@ function formatTimestamp(isoString: string): string {
 
 function LiveSession() {
   const { liveId } = useParams();
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
 
   const [session, setSession] = useState<LiveSessionData | null>(null);
@@ -55,10 +64,13 @@ function LiveSession() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [messageText, setMessageText] = useState("");
-  const [viewerCount, setViewerCount] = useState(1);
+  const [viewerCount, setViewerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+
+  // Live Floating Emoji Reactions State
+  const [reactions, setReactions] = useState<FloatingReaction[]>([]);
 
   // Product modal view state (inspect product without leaving stream)
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -72,9 +84,16 @@ function LiveSession() {
     useState<IMicrophoneAudioTrack | null>(null);
   const [remoteVideoTrack, setRemoteVideoTrack] =
     useState<IRemoteVideoTrack | null>(null);
+  const [remoteAudioTrack, setRemoteAudioTrack] =
+    useState<IRemoteAudioTrack | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isEndingLive, setIsEndingLive] = useState(false);
+
+  // Customer Player Controls State
+  const [isCustomerVideoOff, setIsCustomerVideoOff] = useState(false);
+  const [isCustomerAudioMuted, setIsCustomerAudioMuted] = useState(false);
+  const [volume, setVolume] = useState(100);
 
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const microphoneTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
@@ -142,6 +161,7 @@ function LiveSession() {
       setLocalAudioTrack(null);
       setLocalVideoTrack(null);
       setRemoteVideoTrack(null);
+      setRemoteAudioTrack(null);
     } catch (err) {
       console.error("Agora cleanup failed:", err);
     }
@@ -327,9 +347,12 @@ function LiveSession() {
     };
 
     // 1. Optimistically display message immediately in sender's UI
-    setMessages((prev) => [...prev, newMsgObj]);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === tempId)) return prev;
+      return [...prev, newMsgObj];
+    });
 
-    // 2. Broadcast via Supabase Realtime channel for instant sub-50ms peer delivery
+    // 2. Broadcast via Supabase Realtime channel for instant peer delivery
     if (liveChannelRef.current) {
       liveChannelRef.current.send({
         type: "broadcast",
@@ -338,10 +361,11 @@ function LiveSession() {
       });
     }
 
-    // 3. Persist to Postgres database
+    // 3. Persist to Postgres database with the matching UUID
     const { data: insertedMessage, error: chatError } = await supabase
       .from("live_messages")
       .insert({
+        id: tempId,
         live_id: liveId,
         user_id: user.id,
         message: text,
@@ -444,10 +468,95 @@ function LiveSession() {
     if (!videoContainerRef.current) return;
 
     if (!document.fullscreenElement) {
-      await videoContainerRef.current.requestFullscreen().catch(() => {});
+      await videoContainerRef.current.requestFullscreen().catch(() => { });
     } else {
-      await document.exitFullscreen().catch(() => {});
+      await document.exitFullscreen().catch(() => { });
     }
+  }
+
+  function toggleCustomerVideo() {
+    const nextVideoOff = !isCustomerVideoOff;
+    setIsCustomerVideoOff(nextVideoOff);
+    if (nextVideoOff) {
+      remoteVideoTrack?.stop();
+      setInfo("Stream video paused/hidden.");
+    } else {
+      if (remoteVideoTrack && videoContainerRef.current) {
+        remoteVideoTrack.play(videoContainerRef.current);
+      }
+      setInfo("Stream video resumed.");
+    }
+    setTimeout(() => setInfo(""), 2500);
+  }
+
+  function toggleCustomerMute() {
+    const nextMuted = !isCustomerAudioMuted;
+    setIsCustomerAudioMuted(nextMuted);
+    if (remoteAudioTrack) {
+      remoteAudioTrack.setVolume(nextMuted ? 0 : volume);
+    }
+    setInfo(nextMuted ? "Stream audio muted." : `Stream audio unmuted (${volume}%).`);
+    setTimeout(() => setInfo(""), 2500);
+  }
+
+  function handleVolumeChange(newVolume: number) {
+    const clamped = Math.max(0, Math.min(100, newVolume));
+    setVolume(clamped);
+    if (clamped === 0) {
+      setIsCustomerAudioMuted(true);
+    } else if (isCustomerAudioMuted) {
+      setIsCustomerAudioMuted(false);
+    }
+    if (remoteAudioTrack) {
+      remoteAudioTrack.setVolume(clamped);
+    }
+  }
+
+  function volumeDown() {
+    handleVolumeChange(volume - 10);
+  }
+
+  function volumeUp() {
+    handleVolumeChange(volume + 10);
+  }
+
+  async function handleCustomerLeave() {
+    const confirmLeave = window.confirm("Are you sure you want to leave this live stream?");
+    if (!confirmLeave) return;
+
+    await cleanupAgora();
+    navigate("/customer");
+  }
+
+  function triggerReaction(emoji: string) {
+    const reactionId = crypto.randomUUID();
+    // Randomize horizontal spawn position (66% to 90%)
+    const xOffset = Math.floor(Math.random() * 24) + 68;
+    const duration = parseFloat((Math.random() * 0.6 + 2.2).toFixed(2));
+
+    const newReaction: FloatingReaction = {
+      id: reactionId,
+      emoji,
+      xOffset,
+      duration,
+    };
+
+    // 1. Spatially spawn reaction on local screen
+    setReactions((prev) => [...prev.slice(-25), newReaction]);
+
+    // 2. Broadcast live to all viewers and host
+    if (liveChannelRef.current) {
+      liveChannelRef.current.send({
+        type: "broadcast",
+        event: "emoji_reaction",
+        payload: newReaction,
+      });
+    }
+
+    // 3. Remove reaction from memory once animation completes
+    setTimeout(() => {
+      setReactions((prev) => prev.filter((r) => r.id !== reactionId));
+    }, 3200);
   }
 
   // Fetch Live Session Details, Product, Seller, and Initial Chat
@@ -459,10 +568,14 @@ function LiveSession() {
         return;
       }
 
-      // 1. Fetch Session Record
+      // 1. Fetch Session Record with joined host profile and product
       const { data: sessionData, error: sessionErr } = await supabase
         .from("live_sessions")
-        .select("*")
+        .select(`
+          *,
+          profiles:host_id (id, name, role),
+          products:product_id (*)
+        `)
         .eq("live_id", liveId)
         .single();
 
@@ -475,19 +588,40 @@ function LiveSession() {
 
       setSession(sessionData);
 
-      // 2. Fetch Product, Host Profile, and Messages in parallel
+      // Prepopulate joined host profile and product if returned
+      const joinedProfile = Array.isArray((sessionData as any).profiles)
+        ? (sessionData as any).profiles[0]
+        : (sessionData as any).profiles;
+
+      const joinedProduct = Array.isArray((sessionData as any).products)
+        ? (sessionData as any).products[0]
+        : (sessionData as any).products;
+
+      if (joinedProfile?.name) {
+        setSeller(joinedProfile);
+      } else if (sessionData.host_id === user?.id && profile?.name) {
+        setSeller({ id: sessionData.host_id, name: profile.name });
+      }
+
+      if (joinedProduct) {
+        setProduct(joinedProduct);
+      }
+
+      // 2. Fetch Host Profile, Product, and Messages in parallel as safety fallback
       try {
         const [productRes, sellerRes, rawChatRes] = await Promise.all([
-          supabase
-            .from("products")
-            .select("*")
-            .eq("id", sessionData.product_id)
-            .maybeSingle(),
-          supabase
-            .from("profiles")
-            .select("id, name")
-            .eq("id", sessionData.host_id)
-            .maybeSingle(),
+          !joinedProduct
+            ? supabase
+              .from("products")
+              .select("*")
+              .in("id", [sessionData.product_id])
+            : Promise.resolve({ data: [joinedProduct] }),
+          !joinedProfile?.name
+            ? supabase
+              .from("profiles")
+              .select("id, name")
+              .in("id", [sessionData.host_id])
+            : Promise.resolve({ data: [joinedProfile] }),
           supabase
             .from("live_messages")
             .select("id, live_id, user_id, message, created_at")
@@ -495,12 +629,20 @@ function LiveSession() {
             .order("created_at", { ascending: true }),
         ]);
 
-        if (productRes.data) {
-          setProduct(productRes.data);
+        if (productRes.data && productRes.data.length > 0) {
+          setProduct(productRes.data[0]);
         }
 
-        if (sellerRes.data) {
-          setSeller(sellerRes.data);
+        if (sellerRes.data && sellerRes.data.length > 0 && sellerRes.data[0]?.name) {
+          setSeller(sellerRes.data[0]);
+        } else if (productRes.data && productRes.data[0]?.seller_id) {
+          const { data: fallbackSellerList } = await supabase
+            .from("profiles")
+            .select("id, name")
+            .in("id", [productRes.data[0].seller_id]);
+          if (fallbackSellerList && fallbackSellerList[0]?.name) {
+            setSeller(fallbackSellerList[0]);
+          }
         }
 
         if (rawChatRes.data && rawChatRes.data.length > 0) {
@@ -638,7 +780,12 @@ function LiveSession() {
         }
 
         if (mediaType === "audio") {
-          remoteUser.audioTrack?.play();
+          const audioTrack = remoteUser.audioTrack ?? null;
+          setRemoteAudioTrack(audioTrack);
+          if (audioTrack) {
+            audioTrack.setVolume(isCustomerAudioMuted ? 0 : volume);
+            audioTrack.play();
+          }
         }
       } catch {
         setInfo("The stream had a temporary interruption. Reconnecting...");
@@ -652,34 +799,84 @@ function LiveSession() {
       if (mediaType === "video") {
         setRemoteVideoTrack(null);
       }
+      if (mediaType === "audio") {
+        setRemoteAudioTrack(null);
+      }
+    };
+
+    const handleUserLeft = (
+      _remoteUser: IAgoraRTCRemoteUser,
+      reason: string,
+    ) => {
+      console.log("Seller/host left the stream:", reason);
+      setRemoteVideoTrack(null);
+      setRemoteAudioTrack(null);
+      setSession((prev) => (prev ? { ...prev, status: "ended" } : prev));
+      setInfo("The seller has ended or left the live stream.");
     };
 
     agoraClient.on("user-published", handleUserPublished);
     agoraClient.on("user-unpublished", handleUserUnpublished);
+    agoraClient.on("user-left", handleUserLeft);
 
     return () => {
       agoraClient.off("user-published", handleUserPublished);
       agoraClient.off("user-unpublished", handleUserUnpublished);
+      agoraClient.off("user-left", handleUserLeft);
     };
-  }, [profile?.role]);
+  }, [profile?.role, isCustomerAudioMuted, volume]);
+
+  // Seller Unload / Close Browser Auto-End Live Session
+  useEffect(() => {
+    if (profile?.role !== "seller" || !liveId || session?.status !== "live") return;
+
+    const handleSellerUnload = () => {
+      if (liveChannelRef.current) {
+        liveChannelRef.current.send({
+          type: "broadcast",
+          event: "stream_ended",
+          payload: { live_id: liveId },
+        });
+      }
+      endLiveSessionBeacon(liveId);
+    };
+
+    window.addEventListener("beforeunload", handleSellerUnload);
+    window.addEventListener("pagehide", handleSellerUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleSellerUnload);
+      window.removeEventListener("pagehide", handleSellerUnload);
+    };
+  }, [profile?.role, liveId, session?.status]);
 
   // Play Video Track in Container
   useEffect(() => {
     const videoTrack =
       profile?.role === "seller" ? localVideoTrack : remoteVideoTrack;
 
-    if (!videoTrack || !videoContainerRef.current || isCameraOff) return;
+    if (!videoTrack || !videoContainerRef.current || isCameraOff || isCustomerVideoOff) return;
 
     videoTrack.play(videoContainerRef.current);
 
     return () => {
       videoTrack.stop();
     };
-  }, [profile?.role, localVideoTrack, remoteVideoTrack, isCameraOff]);
+  }, [profile?.role, localVideoTrack, remoteVideoTrack, isCameraOff, isCustomerVideoOff]);
 
   // Realtime Supabase Channel: Broadcast (Instant Chat), Postgres Changes, and Presence
   useEffect(() => {
     if (!liveId) return;
+
+    const isDuplicateMessage = (existingList: Message[], newMsg: Message) => {
+      return existingList.some(
+        (m) =>
+          m.id === newMsg.id ||
+          (m.user_id === newMsg.user_id &&
+            m.message === newMsg.message &&
+            Math.abs(new Date(m.created_at).getTime() - new Date(newMsg.created_at).getTime()) < 3000),
+      );
+    };
 
     const liveChannel = supabase.channel(`live-room-${liveId}`, {
       config: {
@@ -690,19 +887,30 @@ function LiveSession() {
 
     liveChannelRef.current = liveChannel;
 
-    // 1. Listen to instant broadcast chat messages
+    // 1. Listen to instant broadcast chat messages & reactions
     liveChannel
       .on("broadcast", { event: "chat_message" }, (payload) => {
         const incomingMsg = payload.payload as Message;
         setMessages((current) => {
-          if (current.some((m) => m.id === incomingMsg.id)) {
+          if (isDuplicateMessage(current, incomingMsg)) {
             return current;
           }
           return [...current, incomingMsg];
         });
       })
+      .on("broadcast", { event: "emoji_reaction" }, (payload) => {
+        const incomingReaction = payload.payload as FloatingReaction;
+        if (incomingReaction?.id && incomingReaction?.emoji) {
+          setReactions((prev) => [...prev.slice(-25), incomingReaction]);
+
+          setTimeout(() => {
+            setReactions((prev) => prev.filter((r) => r.id !== incomingReaction.id));
+          }, 3200);
+        }
+      })
       .on("broadcast", { event: "stream_ended" }, () => {
         setSession((prev) => (prev ? { ...prev, status: "ended" } : prev));
+        setInfo("The live broadcast has ended.");
       })
       // 2. Fallback postgres_changes for database sync
       .on(
@@ -722,7 +930,7 @@ function LiveSession() {
             .single();
 
           setMessages((current) => {
-            if (current.some((m) => m.id === newMessage.id)) {
+            if (isDuplicateMessage(current, newMessage)) {
               return current;
             }
             return [
@@ -744,10 +952,32 @@ function LiveSession() {
           setSession(payload.new as LiveSessionData);
         },
       )
-      // 3. Presence tracking
+      // 3. Presence tracking (Only count customer viewers, excluding host)
       .on("presence", { event: "sync" }, () => {
-        const count = Object.keys(liveChannel.presenceState()).length;
-        setViewerCount(Math.max(1, count));
+        const presenceState = liveChannel.presenceState();
+        let customerViewerCount = 0;
+
+        Object.entries(presenceState).forEach(([key, presences]: [string, any]) => {
+          const userPresenceList = Array.isArray(presences) ? presences : [presences];
+          const p = userPresenceList[0];
+
+          // Check if this presence is the host/seller
+          const isHost =
+            (session?.host_id && (key === session.host_id || p?.user_id === session.host_id)) ||
+            p?.role === "seller";
+
+          if (!isHost) {
+            customerViewerCount += 1;
+          }
+        });
+
+        setViewerCount(customerViewerCount);
+      })
+      .on("presence", { event: "leave" }, ({ leftPresences }: { leftPresences: any[] }) => {
+        if (session?.host_id && leftPresences.some((p: any) => p.user_id === session.host_id)) {
+          setSession((prev) => (prev ? { ...prev, status: "ended" } : prev));
+          setInfo("The seller has disconnected from the stream.");
+        }
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -763,7 +993,7 @@ function LiveSession() {
       supabase.removeChannel(liveChannel);
       liveChannelRef.current = null;
     };
-  }, [liveId, profile?.role, user?.id]);
+  }, [liveId, profile?.role, user?.id, session?.host_id]);
 
   useEffect(() => {
     if (session?.status === "ended") {
@@ -831,7 +1061,11 @@ function LiveSession() {
               </span>
             </div>
             <h1 className="live-title">{product?.name ?? "Live Showcase"}</h1>
-            <p className="live-host">Hosted by <strong>{seller?.name ?? "Seller"}</strong></p>
+            {profile?.role === "customer" && (
+              <p className="live-host">
+                Hosted by <strong>{seller?.name || "Seller"}</strong>
+              </p>
+            )}
           </div>
 
           <div className="live-header-actions">
@@ -865,7 +1099,7 @@ function LiveSession() {
                 className="agora-video-viewport"
               />
 
-              {session.status === "live" && !localVideoTrack && !remoteVideoTrack && (
+              {session.status === "live" && !localVideoTrack && !remoteVideoTrack && !isCustomerVideoOff && (
                 <div className="video-waiting-overlay">
                   <div className="spinner"></div>
                   <p>
@@ -876,10 +1110,91 @@ function LiveSession() {
                 </div>
               )}
 
+              {profile?.role === "customer" && isCustomerVideoOff && (
+                <div className="video-waiting-overlay">
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🙈</div>
+                  <p>Video stream hidden</p>
+                  <button
+                    onClick={toggleCustomerVideo}
+                    className="btn-secondary btn-sm"
+                    style={{ marginTop: 10 }}
+                  >
+                    Resume Video
+                  </button>
+                </div>
+              )}
+
               {session.status === "ended" && (
                 <div className="video-ended-overlay">
                   <h3>Stream Ended</h3>
                   <p>Thank you for watching!</p>
+                </div>
+              )}
+
+              {/* Floating Live Emoji Reactions */}
+              <div className="floating-reactions-container" aria-hidden="true">
+                {reactions.map((r) => (
+                  <span
+                    key={r.id}
+                    className="floating-emoji"
+                    style={{
+                      left: `${r.xOffset}%`,
+                      animationDuration: `${r.duration}s`,
+                    }}
+                  >
+                    {r.emoji}
+                  </span>
+                ))}
+              </div>
+
+              {/* Quick Reactions Bar (Customer Only) */}
+              {profile?.role === "customer" && session.status === "live" && (
+                <div className="live-reactions-bar">
+                  <button
+                    type="button"
+                    onClick={() => triggerReaction("❤️")}
+                    className="btn-reaction"
+                    title="Send Heart (Love)"
+                    aria-label="Send Heart reaction"
+                  >
+                    ❤️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerReaction("🔥")}
+                    className="btn-reaction"
+                    title="Send Fire (Hyped)"
+                    aria-label="Send Fire reaction"
+                  >
+                    🔥
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerReaction("👏")}
+                    className="btn-reaction"
+                    title="Send Clap (Applause)"
+                    aria-label="Send Clap reaction"
+                  >
+                    👏
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerReaction("🚀")}
+                    className="btn-reaction"
+                    title="Send Rocket (Awesome)"
+                    aria-label="Send Rocket reaction"
+                  >
+                    🚀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerReaction("🛍️")}
+                    className="btn-reaction"
+                    title="Send Shopping (Buy)"
+                    aria-label="Send Shopping reaction"
+                  >
+                    🛍️
+                  </button>
                 </div>
               )}
             </div>
@@ -911,6 +1226,74 @@ function LiveSession() {
                   className="btn-control btn-control-end"
                 >
                   {isEndingLive ? "Ending..." : "🛑 End Broadcast"}
+                </button>
+              </div>
+            )}
+
+            {/* Customer Live Stream Controls */}
+            {profile?.role === "customer" && session.status === "live" && (
+              <div className="customer-controls-panel">
+                <div className="controls-group">
+                  <button
+                    onClick={toggleCustomerMute}
+                    className={`btn-control ${isCustomerAudioMuted ? "btn-control-danger" : ""}`}
+                    title={isCustomerAudioMuted ? "Unmute stream audio" : "Mute stream audio"}
+                  >
+                    {isCustomerAudioMuted ? "🔇 Unmute" : "🔊 Mute"}
+                  </button>
+
+                  <div className="volume-control-wrapper">
+                    <button
+                      onClick={volumeDown}
+                      className="volume-control-btn"
+                      title="Decrease volume (-10%)"
+                      disabled={volume <= 0 || isCustomerAudioMuted}
+                    >
+                      🔉 -
+                    </button>
+                    <div className="volume-slider-box">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={isCustomerAudioMuted ? 0 : volume}
+                        onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                        className="volume-slider"
+                        title={`Volume: ${isCustomerAudioMuted ? 0 : volume}%`}
+                      />
+                      <span className="volume-label">
+                        {isCustomerAudioMuted ? "0%" : `${volume}%`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={volumeUp}
+                      className="volume-control-btn"
+                      title="Increase volume (+10%)"
+                      disabled={volume >= 100}
+                    >
+                      🔊 +
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={toggleCustomerVideo}
+                    className={`btn-control ${isCustomerVideoOff ? "btn-control-danger" : ""}`}
+                    title={isCustomerVideoOff ? "Resume video stream" : "Hide video stream"}
+                  >
+                    {isCustomerVideoOff ? "📺 Show Video" : "🚫 Hide Video"}
+                  </button>
+
+                  <button onClick={enterFullscreen} className="btn-control" title="Toggle Fullscreen">
+                    ⛶ Fullscreen
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleCustomerLeave}
+                  className="btn-control btn-control-leave"
+                  title="Leave live stream"
+                >
+                  🚪 End & Leave
                 </button>
               </div>
             )}
@@ -1086,17 +1469,27 @@ function LiveSession() {
                     <p>No messages yet. Start the conversation!</p>
                   </div>
                 ) : (
-                  messages.map((chatMsg) => (
-                    <div key={chatMsg.id} className="chat-msg-row">
-                      <span className="chat-time">
-                        {formatTimestamp(chatMsg.created_at)}
-                      </span>
-                      <strong className="chat-author">
-                        {getMessageAuthor(chatMsg)}:
-                      </strong>
-                      <span className="chat-text">{chatMsg.message}</span>
-                    </div>
-                  ))
+                  messages.map((chatMsg) => {
+                    const isSelf = chatMsg.user_id === user?.id;
+                    return (
+                      <div
+                        key={chatMsg.id}
+                        className={`chat-bubble-row ${isSelf ? "chat-row-self" : "chat-row-other"}`}
+                      >
+                        <div className={`chat-bubble ${isSelf ? "bubble-self" : "bubble-other"}`}>
+                          {!isSelf && (
+                            <span className="chat-author">
+                              {getMessageAuthor(chatMsg)}
+                            </span>
+                          )}
+                          <p className="chat-text">{chatMsg.message}</p>
+                          <span className="chat-time">
+                            {formatTimestamp(chatMsg.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
                 <div ref={chatBottomRef} />
               </div>
