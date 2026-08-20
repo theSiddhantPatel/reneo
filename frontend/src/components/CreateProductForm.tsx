@@ -35,7 +35,7 @@ function CreateProductForm({ onProductCreated }: CreateProductFormProps) {
       return;
     }
 
-    if (!name || !price || !stock) {
+    if (!name.trim() || !price || !stock) {
       setError("Name, price and stock are required.");
       return;
     }
@@ -49,8 +49,7 @@ function CreateProductForm({ onProductCreated }: CreateProductFormProps) {
 
     try {
       // Create a unique file name
-      const fileExtension = image.name.split(".").pop();
-
+      const fileExtension = image.name.split(".").pop() || "jpg";
       const fileName = `${crypto.randomUUID()}.${fileExtension}`;
 
       // Store image inside seller's own folder
@@ -73,18 +72,16 @@ function CreateProductForm({ onProductCreated }: CreateProductFormProps) {
       // Create product
       const { error: productError } = await supabase.from("products").insert({
         seller_id: user.id,
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         price: Number(price),
         stock: Number(stock),
         image_url: publicUrl,
       });
 
       if (productError) {
-        // If product creation fails after image upload,
-        // remove the uploaded image.
+        // If product creation fails after image upload, remove the uploaded image.
         await supabase.storage.from("product-images").remove([filePath]);
-
         throw productError;
       }
 
@@ -94,14 +91,13 @@ function CreateProductForm({ onProductCreated }: CreateProductFormProps) {
       setStock("");
       setImage(null);
 
-      setSuccess("Product created successfully.");
-
+      setSuccess("Product created successfully!");
       onProductCreated();
-    } catch (error) {
-      console.error("Product creation failed:", error);
+    } catch (err) {
+      console.error("Product creation failed:", err);
 
-      if (error instanceof Error) {
-        setError(error.message);
+      if (err instanceof Error) {
+        setError(err.message);
       } else {
         setError("Failed to create product.");
       }
@@ -111,71 +107,85 @@ function CreateProductForm({ onProductCreated }: CreateProductFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>Create Product</h2>
+    <div>
+      <h2>Add New Product</h2>
+      <p className="form-subtitle">Create a product to feature in your live broadcast.</p>
 
-      <div>
-        <label>Name</label>
+      <form onSubmit={handleSubmit} className="stack-form">
+        <div className="form-group">
+          <label htmlFor="prod-name">Product Name *</label>
+          <input
+            id="prod-name"
+            type="text"
+            placeholder="e.g. Handmade Silk Scarf"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </div>
 
-        <input
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </div>
+        <div className="form-group">
+          <label htmlFor="prod-desc">Description</label>
+          <textarea
+            id="prod-desc"
+            rows={3}
+            placeholder="Key features, materials, sizes..."
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
 
-      <div>
-        <label>Description</label>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="prod-price">Price ($) *</label>
+            <input
+              id="prod-price"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="29.99"
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              required
+            />
+          </div>
 
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </div>
+          <div className="form-group">
+            <label htmlFor="prod-stock">Stock Quantity *</label>
+            <input
+              id="prod-stock"
+              type="number"
+              min="0"
+              placeholder="10"
+              value={stock}
+              onChange={(event) => setStock(event.target.value)}
+              required
+            />
+          </div>
+        </div>
 
-      <div>
-        <label>Price</label>
+        <div className="form-group">
+          <label htmlFor="prod-image">Product Image *</label>
+          <input
+            id="prod-image"
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setImage(file);
+            }}
+            required
+          />
+        </div>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={price}
-          onChange={(event) => setPrice(event.target.value)}
-        />
-      </div>
+        <button type="submit" className="btn-primary btn-block" disabled={loading}>
+          {loading ? "Uploading & Creating..." : "Create Product"}
+        </button>
 
-      <div>
-        <label>Stock</label>
-
-        <input
-          type="number"
-          min="0"
-          value={stock}
-          onChange={(event) => setStock(event.target.value)}
-        />
-      </div>
-
-      <div>
-        <label>Product Image</label>
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            setImage(file);
-          }}
-        />
-      </div>
-
-      <button type="submit" disabled={loading}>
-        {loading ? "Creating..." : "Create Product"}
-      </button>
-
-      {error && <p>{error}</p>}
-      {success && <p>{success}</p>}
-    </form>
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+      </form>
+    </div>
   );
 }
 

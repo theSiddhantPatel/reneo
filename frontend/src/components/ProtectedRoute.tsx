@@ -1,8 +1,10 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
+type UserRole = "seller" | "customer";
+
 type ProtectedRouteProps = {
-  allowedRole: "seller" | "customer";
+  allowedRole: UserRole | UserRole[];
   children: React.ReactNode;
 };
 
@@ -16,29 +18,13 @@ function ProtectedRoute({ allowedRole, children }: ProtectedRouteProps) {
 
   // User is not logged in
   if (!user || !profile) {
-    return (
-      <div>
-        console.log("you have to login first");
-        <p>You have to login first</p>
-        <p>Redirecting to login page...</p>
-        <Navigate to="/login" replace />;
-      </div>
-    );
+    return <Navigate to="/login" replace />;
   }
 
-  // Profile hasn't been loaded
-  if (!profile) {
-    return (
-      <div>
-        <p>Unable to load your profile</p>
-        <p>Please login again</p>
-        <p>Loading profile...</p>;
-      </div>
-    );
-  }
+  // Check whether the user's role is allowed
+  const allowedRoles = Array.isArray(allowedRole) ? allowedRole : [allowedRole];
 
-  // User has the wrong role
-  if (profile.role !== allowedRole) {
+  if (!allowedRoles.includes(profile.role)) {
     console.log("You are not allowed");
     return <Navigate to="/" replace />;
   }
