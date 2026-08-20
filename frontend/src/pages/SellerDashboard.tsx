@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import type { Product } from "../types/product";
 import CreateProductForm from "../components/CreateProductForm";
+import StockAdjuster from "../components/StockAdjuster";
 import Navbar from "../components/Navbar";
 import { startLiveSession } from "../lib/liveApi";
 
@@ -43,6 +44,25 @@ function SellerDashboard() {
       );
     } finally {
       setStartingLiveId(null);
+    }
+  };
+
+  const handleUpdateStock = async (productId: string, newStock: number) => {
+    // Optimistic UI update
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
+    );
+
+    const { error } = await supabase
+      .from("products")
+      .update({ stock: newStock })
+      .eq("id", productId);
+
+    if (error) {
+      console.error("Failed to update product stock:", error);
+      setActionError(`Could not update stock: ${error.message}`);
+      fetchProducts();
+      return false;
     }
   };
 
@@ -221,12 +241,26 @@ function SellerDashboard() {
                     <div className="product-card-body">
                       <h3 className="product-title">{product.name}</h3>
                       <p className="product-desc">{product.description || "No description provided."}</p>
+                      
                       <div className="product-meta">
                         <span className="price-tag">${product.price}</span>
                         <span className={`stock-tag ${product.stock < 1 ? "stock-out" : product.stock < 5 ? "stock-low" : ""}`}>
-                          {product.stock < 1 ? "Out of stock" : `${product.stock} in stock`}
+                          {product.stock < 1 ? "Out of stock" : `${product.stock} units`}
                         </span>
                       </div>
+
+                      {/* Interactive Stock Adjuster */}
+                      <div className="product-stock-control-row">
+                        <span className="stock-label">Stock:</span>
+                        <StockAdjuster
+                          productId={product.id}
+                          currentStock={product.stock}
+                          onStockChange={handleUpdateStock}
+                          size="sm"
+                          showQuickAdd={true}
+                        />
+                      </div>
+
                       <button
                         onClick={() => handleGoLive(product.id)}
                         disabled={startingLiveId === product.id || product.stock < 1}
@@ -267,9 +301,13 @@ function SellerDashboard() {
                     </div>
 
                     <div className="product-list-stock">
-                      <span className={`stock-tag ${product.stock < 1 ? "stock-out" : product.stock < 5 ? "stock-low" : ""}`}>
-                        {product.stock < 1 ? "Out of Stock" : `${product.stock} units`}
-                      </span>
+                      <StockAdjuster
+                        productId={product.id}
+                        currentStock={product.stock}
+                        onStockChange={handleUpdateStock}
+                        size="sm"
+                        showQuickAdd={true}
+                      />
                     </div>
 
                     <div className="product-list-action">

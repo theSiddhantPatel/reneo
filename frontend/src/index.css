@@ -1975,3 +1975,159 @@ button, input, select, textarea {
     font-size: 0.78rem;
   }
 }
+
+/* ==========================================================================
+   Stock Management & StockAdjuster Components
+   ========================================================================== */
+
+.product-stock-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.stock-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stock-adjuster-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stock-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.stock-btn {
+  background: var(--bg-surface-subtle);
+  color: var(--text-primary);
+  border: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.stock-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.stock-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stock-input {
+  width: 44px;
+  height: 28px;
+  text-align: center;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0 2px;
+  -moz-appearance: textfield;
+}
+
+.stock-input::-webkit-outer-spin-button,
+.stock-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stock-input:focus {
+  outline: none;
+  background: var(--primary-subtle);
+  color: var(--primary);
+}
+
+.stock-input-out {
+  color: #ef4444;
+  font-weight: 800;
+}
+
+.stock-input-low {
+  color: #f59e0b;
+}
+
+.stock-quick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stock-btn-quick {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stock-btn-quick:hover:not(:disabled) {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+.stock-btn-quick:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stock-syncing-indicator {
+  font-size: 0.6rem;
+  color: var(--primary);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.stock-adjuster-sm .stock-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 0.9rem;
+}
+
+.stock-adjuster-sm .stock-input {
+  width: 38px;
+  height: 24px;
+  font-size: 0.8rem;
+}
+
+.stock-adjuster-sm .stock-btn-quick {
+  padding: 2px 5px;
+  font-size: 0.7rem;
+}
+

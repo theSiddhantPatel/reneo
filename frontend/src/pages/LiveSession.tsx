@@ -13,6 +13,7 @@ import { getAgoraToken } from "../lib/agoraApi";
 import { endLiveSession, endLiveSessionBeacon } from "../lib/liveApi";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
+import StockAdjuster from "../components/StockAdjuster";
 import type { LiveSessionData } from "../types/liveSession";
 import type { Product } from "../types/product";
 
@@ -603,6 +604,35 @@ function LiveSession() {
     }
   }
 
+  // In-Stream Stock Adjustment for Host
+  const handleUpdateStock = async (productId: string, newStock: number) => {
+    if (product && product.id === productId) {
+      setProduct((prev) => (prev ? { ...prev, stock: newStock } : null));
+    }
+    setSellerInventory((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
+    );
+
+    if (liveChannelRef.current) {
+      liveChannelRef.current.send({
+        type: "broadcast",
+        event: "stock_updated",
+        payload: { productId, stock: newStock },
+      });
+    }
+
+    const { error: stockErr } = await supabase
+      .from("products")
+      .update({ stock: newStock })
+      .eq("id", productId);
+
+    if (stockErr) {
+      console.error("Failed to update stock live:", stockErr);
+      setInfo(`Failed to update stock: ${stockErr.message}`);
+      return false;
+    }
+  };
+
   // Fetch Live Session Details, Product, Seller, and Initial Chat
   useEffect(() => {
     async function fetchLiveSession() {
@@ -968,6 +998,20 @@ function LiveSession() {
           setProduct(newProduct);
           setInfo(`Featured product updated: "${newProduct.name}"!`);
           setTimeout(() => setInfo(""), 4500);
+        }
+      })
+      .on("broadcast", { event: "stock_updated" }, (payload) => {
+        const { productId, stock: newStock } = payload.payload as {
+          productId: string;
+          stock: number;
+        };
+        if (productId !== undefined && newStock !== undefined) {
+          setProduct((prev) =>
+            prev && prev.id === productId ? { ...prev, stock: newStock } : prev
+          );
+          setSellerInventory((prev) =>
+            prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
+          );
         }
       })
       .on("broadcast", { event: "stream_ended" }, () => {
@@ -1474,6 +1518,21 @@ function LiveSession() {
                       </button>
                     )}
                   </div>
+
+                  {profile?.role === "seller" && (
+                    <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border-subtle)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)" }}>Host Stock Controls:</span>
+                      </div>
+                      <StockAdjuster
+                        productId={product.id}
+                        currentStock={product.stock}
+                        onStockChange={handleUpdateStock}
+                        size="sm"
+                        showQuickAdd={true}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="empty-state" style={{ padding: 16 }}>
@@ -1729,6 +1788,17 @@ function LiveSession() {
                               <span className="switcher-card-price">${item.price}</span>
                               <span className="switcher-card-stock">{item.stock} in stock</span>
                             </div>
+                            {profile?.role === "seller" && (
+                              <div style={{ marginTop: 6 }}>
+                                <StockAdjuster
+                                  productId={item.id}
+                                  currentStock={item.stock}
+                                  onStockChange={handleUpdateStock}
+                                  size="sm"
+                                  showQuickAdd={true}
+                                />
+                              </div>
+                            )}
                           </div>
 
                           <button
