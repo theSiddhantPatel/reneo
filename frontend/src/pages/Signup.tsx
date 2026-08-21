@@ -145,7 +145,8 @@ function Signup() {
               <input
                 id="signup-name"
                 type="text"
-                placeholder="e.g. Amara Okafor"
+                placeholder="e.g. Siddhant Patel
+              "
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -182,24 +183,20 @@ function Signup() {
                 <div className="password-strength-container">
                   <div className="password-strength-bars">
                     <div
-                      className={`password-strength-bar ${
-                        strength.score >= 1 ? `active-${strength.colorClass}` : ""
-                      }`}
+                      className={`password-strength-bar ${strength.score >= 1 ? `active-${strength.colorClass}` : ""
+                        }`}
                     />
                     <div
-                      className={`password-strength-bar ${
-                        strength.score >= 2 ? `active-${strength.colorClass}` : ""
-                      }`}
+                      className={`password-strength-bar ${strength.score >= 2 ? `active-${strength.colorClass}` : ""
+                        }`}
                     />
                     <div
-                      className={`password-strength-bar ${
-                        strength.score >= 3 ? `active-${strength.colorClass}` : ""
-                      }`}
+                      className={`password-strength-bar ${strength.score >= 3 ? `active-${strength.colorClass}` : ""
+                        }`}
                     />
                     <div
-                      className={`password-strength-bar ${
-                        strength.score >= 4 ? `active-${strength.colorClass}` : ""
-                      }`}
+                      className={`password-strength-bar ${strength.score >= 4 ? `active-${strength.colorClass}` : ""
+                        }`}
                     />
                   </div>
                   <div className="password-strength-label">
