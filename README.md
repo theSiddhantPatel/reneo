@@ -200,9 +200,13 @@ The application handles edge cases with clear, actionable user messages:
 
 ## 9. Demo Accounts
 
-| Role | Email | Password |
-| :--- | :--- | :--- |
-| **Seller** | `seller@reneo.demo` | `Password123!` |
-| **Customer** | `customer@reneo.demo` | `Password123!` |
+| Name | Account (Email) | Password | Role |
+| :--- | :--- | :--- | :--- |
+| **Jessica** | `mp5459544@gmail.com` | `111111` | **Seller** |
+| **Siddhant Patel** | `bxivfk0171@minitts.net` | `111111` | **Customer** |
+| **Sandhya** | `spindia191@gmail.com` | `123@abc` | **Customer** |
+| **David** | `ovfgeo2994@minitts.net` | `111111` | **Seller** |
+| **Minitts** | `ajqnol1993@minitts.net` | `111111` | **Customer** |
 
 *(You can also create fresh seller and customer accounts directly via the `/signup` screen).*
+
