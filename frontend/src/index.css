@@ -2404,4 +2404,71 @@ button, input, select, textarea {
   flex-shrink: 0;
 }
 
+/* ==========================================================================
+   Password Strength Meter
+   ========================================================================== */
+
+.password-strength-container {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.password-strength-bars {
+  display: flex;
+  gap: 4px;
+  height: 4px;
+}
+
+.password-strength-bar {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  transition: background-color 0.25s ease;
+}
+
+.password-strength-bar.active-weak {
+  background: #ef4444;
+}
+
+.password-strength-bar.active-medium {
+  background: #f59e0b;
+}
+
+.password-strength-bar.active-strong {
+  background: #10b981;
+}
+
+.password-strength-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.password-strength-text {
+  font-weight: 700;
+}
+
+.password-strength-text.weak {
+  color: #ef4444;
+}
+
+.password-strength-text.medium {
+  color: #f59e0b;
+}
+
+.password-strength-text.strong {
+  color: #10b981;
+}
+
+.password-hints {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+
 

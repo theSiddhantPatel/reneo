@@ -1,9 +1,50 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
 
 type Role = "seller" | "customer";
+
+function calculatePasswordStrength(pass: string): {
+  score: number;
+  label: "Too Weak" | "Weak" | "Medium" | "Strong";
+  colorClass: "weak" | "medium" | "strong";
+  feedback: string;
+} {
+  if (!pass) {
+    return { score: 0, label: "Too Weak", colorClass: "weak", feedback: "Enter at least 8 characters" };
+  }
+
+  // Trivial repetitive/sequential pattern check (e.g. 111111, 123456, aaaaaa, password)
+  const isRepetitive = /^(.)\1+$/.test(pass);
+  const isCommonTrivial = ["123456", "12345678", "password", "qwerty", "111111", "admin123"].includes(
+    pass.toLowerCase(),
+  );
+
+  if (isRepetitive || isCommonTrivial) {
+    return {
+      score: 1,
+      label: "Weak",
+      colorClass: "weak",
+      feedback: "Avoid simple repetitive characters or common words",
+    };
+  }
+
+  let score = 0;
+  if (pass.length >= 8) score += 1;
+  if (pass.length >= 12) score += 1;
+  if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) score += 1;
+  if (/\d/.test(pass)) score += 1;
+  if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+  if (score <= 1) {
+    return { score: 1, label: "Weak", colorClass: "weak", feedback: "Use at least 8 characters with mixed letters & numbers" };
+  }
+  if (score === 2 || score === 3) {
+    return { score: 2, label: "Medium", colorClass: "medium", feedback: "Good! Add symbols or uppercase for extra security" };
+  }
+  return { score: 4, label: "Strong", colorClass: "strong", feedback: "Great! Strong, secure password" };
+}
 
 function Signup() {
   const navigate = useNavigate();
@@ -16,11 +57,25 @@ function Signup() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const strength = useMemo(() => calculatePasswordStrength(password), [password]);
+
   async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     setMessage("");
     setError("");
+
+    // Client-side password security validation
+    if (password.length < 8) {
+      setError("For security, your password must be at least 8 characters long.");
+      return;
+    }
+
+    if (/^(.)\1+$/.test(password) || ["111111", "123456", "password"].includes(password.toLowerCase())) {
+      setError("Please choose a stronger password. Avoid repetitive digits or simple sequences.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -47,7 +102,7 @@ function Signup() {
         throw signUpError;
       }
 
-      // Supabase returns a user object with empty identities ([]) when the email already exists
+      // Supabase returns an empty identities array when the user email already exists
       if (
         data.user &&
         Array.isArray(data.user.identities) &&
@@ -90,7 +145,7 @@ function Signup() {
               <input
                 id="signup-name"
                 type="text"
-                placeholder="e.g. Siddhant Patel"
+                placeholder="e.g. Amara Okafor"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -115,12 +170,47 @@ function Signup() {
               <input
                 id="signup-password"
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters (mixed letters & numbers)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
               />
+
+              {/* Real-time Password Strength Indicator */}
+              {password.length > 0 && (
+                <div className="password-strength-container">
+                  <div className="password-strength-bars">
+                    <div
+                      className={`password-strength-bar ${
+                        strength.score >= 1 ? `active-${strength.colorClass}` : ""
+                      }`}
+                    />
+                    <div
+                      className={`password-strength-bar ${
+                        strength.score >= 2 ? `active-${strength.colorClass}` : ""
+                      }`}
+                    />
+                    <div
+                      className={`password-strength-bar ${
+                        strength.score >= 3 ? `active-${strength.colorClass}` : ""
+                      }`}
+                    />
+                    <div
+                      className={`password-strength-bar ${
+                        strength.score >= 4 ? `active-${strength.colorClass}` : ""
+                      }`}
+                    />
+                  </div>
+                  <div className="password-strength-label">
+                    <span>Password Strength:</span>
+                    <span className={`password-strength-text ${strength.colorClass}`}>
+                      {strength.label}
+                    </span>
+                  </div>
+                  <p className="password-hints">{strength.feedback}</p>
+                </div>
+              )}
             </div>
 
             <div className="form-group">

@@ -163,6 +163,8 @@ Open `http://localhost:5173` in your browser.
    - Supabase Storage policies enforce that sellers can only upload and delete files located in their own user folder (`(storage.foldername(name))[1] = auth.uid()::text`).
 4. **Secret Protection**:
    - Agora App Certificate is strictly stored in backend environment variables and is never bundled in frontend assets.
+5. **Credential Security & Strength Enforcement**:
+   - Client-side real-time password strength validation enforces minimum 8 characters, checks for complexity (mixed case, numbers, symbols), and prevents trivial/sequential patterns (e.g. `111111`, `password`, `123456`) on new signups.
 
 ---
 
