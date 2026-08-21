@@ -2,7 +2,7 @@ export function getBackendUrl(): string {
   const envUrl = import.meta.env.VITE_BACKEND_URL?.trim();
 
   // If explicitly configured in Vercel (.env), use it and strip any trailing slash
-  if (envUrl && envUrl.length > 0) {
+  if (envUrl && envUrl.length > 0 && !envUrl.includes("localhost")) {
     return envUrl.replace(/\/+$/, "");
   }
 
@@ -20,5 +20,6 @@ export function getBackendUrl(): string {
     }
   }
 
-  return "http://localhost:4000";
+  // Deployed production backend on Render
+  return "https://reneo-backend-5eq6.onrender.com";
 }
