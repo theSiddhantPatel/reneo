@@ -7,23 +7,35 @@ import cors from "cors";
 
 const app = express();
 
-// Secure origin resolution for production deployment
-const allowedOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
+// Secure origin resolution for production and preview deployments
+const configuredOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Strictly allow requests only from verified frontend origins
-      if (origin && allowedOrigins.includes(origin)) {
+      // Allow non-browser requests in non-production
+      if (!origin) {
         return callback(null, true);
       }
-      // Fallback for non-browser tooling only in non-production environments
-      if (!origin && process.env.NODE_ENV !== "production") {
+
+      const cleanOrigin = origin.replace(/\/+$/, "");
+
+      // Check if origin matches configured FRONTEND_URL or official project domains
+      const isAllowed =
+        configuredOrigins.includes(cleanOrigin) ||
+        cleanOrigin === "https://reneo.siddpatel.com" ||
+        cleanOrigin.endsWith(".vercel.app") ||
+        cleanOrigin.startsWith("http://localhost:") ||
+        cleanOrigin.startsWith("http://127.0.0.1:");
+
+      if (isAllowed) {
         return callback(null, true);
       }
+
+      console.warn(`[CORS Blocked] Origin: ${origin}`);
       return callback(new Error(`CORS policy: Access denied for origin ${origin}`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -33,6 +45,11 @@ app.use(
 );
 
 app.use(express.json());
+
+// Health check endpoint to verify backend is up
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 app.use("/api/agora", agoraRouter);
 app.use("/api/live", liveRouter);

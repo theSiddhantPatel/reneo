@@ -1,10 +1,24 @@
 export function getBackendUrl(): string {
-  const envUrl = import.meta.env.VITE_BACKEND_URL;
-  // If explicitly pointing to a remote host (e.g. production domain), use it directly
-  if (envUrl && !envUrl.includes("localhost") && !envUrl.includes("127.0.0.1")) {
-    return envUrl;
+  const envUrl = import.meta.env.VITE_BACKEND_URL?.trim();
+
+  // If explicitly configured in Vercel (.env), use it and strip any trailing slash
+  if (envUrl && envUrl.length > 0) {
+    return envUrl.replace(/\/+$/, "");
   }
-  // For local development and testing from mobile phones on LAN (e.g. 192.168.x.x)
-  const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
-  return `http://${hostname}:4000`;
+
+  // Local development fallbacks (localhost or LAN IP)
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.")
+    ) {
+      return `http://${hostname}:4000`;
+    }
+  }
+
+  return "http://localhost:4000";
 }
