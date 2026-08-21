@@ -36,7 +36,11 @@ export default function EditProductModal({
       setDescription(product.description || "");
       setPrice(product.price.toString());
       setStock(product.stock.toString());
-      setStatus(product.status || "active");
+      setStatus(
+        product.status === "draft" || product.status === "archived"
+          ? product.status
+          : "active"
+      );
       setPreviewUrl(product.image_url || null);
       setImage(null);
       setError("");
