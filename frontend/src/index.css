@@ -1138,22 +1138,61 @@ button, input, select, textarea {
   }
 }
 
-/* Quick Reaction Floating Bar */
-.live-reactions-bar {
+/* Quick Reaction Floating Bar (Foldable) */
+.live-reactions-wrapper {
   position: absolute;
   bottom: 12px;
   right: 12px;
+  z-index: 10;
+}
+
+.btn-reactions-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(17, 23, 38, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.btn-reactions-fold-toggle:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 6px 20px var(--primary-glow);
+}
+
+.reaction-fold-icon {
+  font-size: 1.1rem;
+  animation: pulse 1.5s infinite;
+}
+
+.live-reactions-bar {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(17, 23, 38, 0.78);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(17, 23, 38, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-full);
-  padding: 4px 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  z-index: 10;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  padding: 4px 6px 4px 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  animation: fadeInScale 0.2s ease;
+}
+
+.reactions-emoji-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .btn-reaction {
@@ -1175,6 +1214,39 @@ button, input, select, textarea {
 
 .btn-reaction:active {
   transform: scale(0.9);
+}
+
+.btn-reaction-fold-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-reaction-fold-close:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .host-controls-panel,
@@ -1626,18 +1698,23 @@ button, input, select, textarea {
 
 .chat-input-form {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-top: 14px;
 }
 
 .chat-input {
   flex: 1;
+  min-width: 0;
+  height: 44px;
   padding: 10px 14px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   background: var(--bg-surface-raised);
   color: var(--text-primary);
-  font-size: 0.88rem;
+  font-size: 16px; /* 16px prevents iOS Safari/Chrome from triggering auto-zoom */
+  line-height: 1.4;
+  -webkit-appearance: none;
 }
 
 .chat-input:focus {
@@ -1646,14 +1723,44 @@ button, input, select, textarea {
   box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
+.chat-send-btn {
+  height: 44px;
+  padding: 0 18px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.send-icon-arrow {
+  font-size: 0.85rem;
+  transition: transform 0.15s ease;
+}
+
+.chat-send-btn:hover:not(:disabled) .send-icon-arrow {
+  transform: translateX(2px);
+}
+
 .chat-disabled-banner {
   margin-top: 12px;
   font-size: 0.85rem;
   color: var(--text-muted);
   text-align: center;
-  padding: 8px;
+  padding: 10px 12px;
   background: var(--bg-surface-raised);
   border-radius: var(--radius);
+  border: 1px solid var(--border-subtle);
 }
 
 /* ==========================================================================
@@ -1938,10 +2045,17 @@ button, input, select, textarea {
 
   .live-main-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .mobile-tab-bar {
     display: grid;
+    gap: 6px;
+  }
+
+  .tab-btn {
+    padding: 8px 4px;
+    font-size: 0.8rem;
   }
 
   .mobile-hidden {
@@ -1952,8 +2066,26 @@ button, input, select, textarea {
     aspect-ratio: 16 / 9;
   }
 
+  .panel-card {
+    padding: 14px;
+  }
+
   .chat-messages-container {
-    height: 220px;
+    height: 250px;
+    max-height: 42vh;
+  }
+
+  .chat-input-form {
+    gap: 6px;
+  }
+
+  .chat-input {
+    font-size: 16px;
+    padding: 8px 12px;
+  }
+
+  .chat-send-btn {
+    padding: 0 14px;
   }
 
   .form-row {
@@ -1973,6 +2105,11 @@ button, input, select, textarea {
   .btn-signout, .btn-nav-link {
     padding: 4px 8px;
     font-size: 0.78rem;
+  }
+
+  .tab-btn {
+    padding: 7px 2px;
+    font-size: 0.75rem;
   }
 }
 
@@ -2130,4 +2267,141 @@ button, input, select, textarea {
   padding: 2px 5px;
   font-size: 0.7rem;
 }
+
+/* ==========================================================================
+   Product Management: Edit & Delete Actions & Modals
+   ========================================================================== */
+
+.product-card-top-bar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.product-card-top-bar > * {
+  pointer-events: auto;
+}
+
+.product-card {
+  position: relative;
+}
+
+.product-card-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.btn-card-icon-action {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+  color: #ffffff;
+}
+
+.btn-card-icon-action:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.btn-card-icon-delete:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-danger-outline {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  transition: all 0.15s ease;
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.status-badge-mini {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.status-badge-mini.status-archived {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.status-badge-mini.status-draft {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.edit-product-modal-dialog {
+  max-width: 540px;
+  width: 100%;
+}
+
+.edit-product-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.edit-image-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.edit-image-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  border: 1px solid var(--border-medium);
+  flex-shrink: 0;
+}
+
+.edit-image-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
 

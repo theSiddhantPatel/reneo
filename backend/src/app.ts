@@ -6,13 +6,29 @@ import liveRouter from "./routes/live.routes.js";
 import cors from "cors";
 
 const app = express();
-const allowedOrigin = process.env.FRONTEND_URL ?? "http://localhost:5173";
+
+// Secure origin resolution for production deployment
+const allowedOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: (origin, callback) => {
+      // Strictly allow requests only from verified frontend origins
+      if (origin && allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      // Fallback for non-browser tooling only in non-production environments
+      if (!origin && process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS policy: Access denied for origin ${origin}`));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   }),
 );
 

@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import type { Product } from "../types/product";
 import CreateProductForm from "../components/CreateProductForm";
+import EditProductModal from "../components/EditProductModal";
 import StockAdjuster from "../components/StockAdjuster";
 import Navbar from "../components/Navbar";
 import { startLiveSession } from "../lib/liveApi";
@@ -14,7 +15,13 @@ function SellerDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [startingLiveId, setStartingLiveId] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
+
+  // Edit Product Modal State
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // UI States: Foldable Inventory, Search, Form Accordion, View Mode
   const [searchQuery, setSearchQuery] = useState("");
@@ -30,6 +37,7 @@ function SellerDashboard() {
     }
 
     setActionError("");
+    setActionSuccess("");
     setStartingLiveId(productId);
 
     try {
@@ -63,6 +71,93 @@ function SellerDashboard() {
       setActionError(`Could not update stock: ${error.message}`);
       fetchProducts();
       return false;
+    }
+  };
+
+  const handleOpenEdit = (product: Product) => {
+    setEditingProduct(product);
+    setIsEditModalOpen(true);
+  };
+
+  const handleProductUpdated = (updatedProduct: Product) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
+    );
+    setActionSuccess(`Successfully updated "${updatedProduct.name}"!`);
+    setTimeout(() => setActionSuccess(""), 4000);
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to remove "${product.name}"?\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingProductId(product.id);
+    setActionError("");
+    setActionSuccess("");
+
+    try {
+      const { error: deleteErr } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", product.id);
+
+      if (deleteErr) {
+        // If product is referenced in past live sessions, offer archival
+        if (
+          deleteErr.message.includes("violates foreign key constraint") ||
+          (deleteErr as any).code === "23503"
+        ) {
+          const archiveConfirm = window.confirm(
+            `"${product.name}" has been featured in past live broadcast records and cannot be permanently deleted.\n\nWould you like to Archive it instead so it is hidden from future live streams?`
+          );
+          if (archiveConfirm) {
+            const { error: archiveErr } = await supabase
+              .from("products")
+              .update({ status: "archived" })
+              .eq("id", product.id);
+
+            if (archiveErr) throw archiveErr;
+
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === product.id ? { ...p, status: "archived" } : p
+              )
+            );
+            setActionSuccess(`Archived "${product.name}".`);
+            setTimeout(() => setActionSuccess(""), 4000);
+            return;
+          }
+          return;
+        }
+        throw deleteErr;
+      }
+
+      // Optimistically remove from state
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      setActionSuccess(`Removed "${product.name}".`);
+      setTimeout(() => setActionSuccess(""), 4000);
+
+      // Clean up uploaded image if in product-images storage
+      if (product.image_url && product.image_url.includes("product-images")) {
+        try {
+          const urlParts = product.image_url.split("/product-images/");
+          if (urlParts.length > 1) {
+            const storagePath = decodeURIComponent(urlParts[1]);
+            await supabase.storage.from("product-images").remove([storagePath]);
+          }
+        } catch {
+          // Ignore background storage cleanup error
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete product:", err);
+      setActionError(
+        err instanceof Error ? err.message : "Failed to delete product."
+      );
+    } finally {
+      setDeletingProductId(null);
     }
   };
 
@@ -120,7 +215,7 @@ function SellerDashboard() {
           <div>
             <h1>Seller Dashboard</h1>
             <p className="subtitle">
-              Welcome back, <strong>{profile?.name}</strong>. Manage your inventory and launch live commerce broadcasts.
+              Welcome back, <strong>{profile?.name}</strong>. Manage your inventory, edit products, and launch live commerce broadcasts.
             </p>
           </div>
           <button
@@ -132,6 +227,7 @@ function SellerDashboard() {
         </div>
 
         {actionError && <div className="alert alert-error">{actionError}</div>}
+        {actionSuccess && <div className="alert alert-success">{actionSuccess}</div>}
 
         <div className="dashboard-grid">
           {/* Collapsible Form Section */}
@@ -229,6 +325,33 @@ function SellerDashboard() {
               <div className="products-grid">
                 {displayedProducts.map((product) => (
                   <div key={product.id} className="product-card card">
+                    <div className="product-card-top-bar">
+                      {product.status && product.status !== "active" && (
+                        <span className={`status-badge-mini status-${product.status}`}>
+                          {product.status}
+                        </span>
+                      )}
+                      <div className="product-card-actions">
+                        <button
+                          onClick={() => handleOpenEdit(product)}
+                          className="btn-card-icon-action"
+                          title="Edit product name, description, price, stock or image"
+                          aria-label="Edit product"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(product)}
+                          disabled={deletingProductId === product.id}
+                          className="btn-card-icon-action btn-card-icon-delete"
+                          title="Remove product"
+                          aria-label="Remove product"
+                        >
+                          {deletingProductId === product.id ? "⏳" : "🗑️"}
+                        </button>
+                      </div>
+                    </div>
+
                     {product.image_url ? (
                       <img
                         src={product.image_url}
@@ -241,7 +364,7 @@ function SellerDashboard() {
                     <div className="product-card-body">
                       <h3 className="product-title">{product.name}</h3>
                       <p className="product-desc">{product.description || "No description provided."}</p>
-                      
+
                       <div className="product-meta">
                         <span className="price-tag">${product.price}</span>
                         <span className={`stock-tag ${product.stock < 1 ? "stock-out" : product.stock < 5 ? "stock-low" : ""}`}>
@@ -261,17 +384,21 @@ function SellerDashboard() {
                         />
                       </div>
 
-                      <button
-                        onClick={() => handleGoLive(product.id)}
-                        disabled={startingLiveId === product.id || product.stock < 1}
-                        className="btn-primary btn-block btn-golive"
-                      >
-                        {startingLiveId === product.id
-                          ? "Starting Stream..."
-                          : product.stock < 1
-                            ? "Out of Stock"
-                            : "🔴 GO LIVE"}
-                      </button>
+                      <div className="product-card-footer-actions">
+                        <button
+                          onClick={() => handleGoLive(product.id)}
+                          disabled={startingLiveId === product.id || product.stock < 1 || product.status === "archived"}
+                          className="btn-primary btn-block btn-golive"
+                        >
+                          {startingLiveId === product.id
+                            ? "Starting Stream..."
+                            : product.status === "archived"
+                              ? "Archived"
+                              : product.stock < 1
+                                ? "Out of Stock"
+                                : "🔴 GO LIVE"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -292,7 +419,14 @@ function SellerDashboard() {
                     )}
 
                     <div className="product-list-details">
-                      <h4>{product.name}</h4>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <h4>{product.name}</h4>
+                        {product.status && product.status !== "active" && (
+                          <span className={`status-badge-mini status-${product.status}`}>
+                            {product.status}
+                          </span>
+                        )}
+                      </div>
                       <p>{product.description || "No description"}</p>
                     </div>
 
@@ -312,8 +446,23 @@ function SellerDashboard() {
 
                     <div className="product-list-action">
                       <button
+                        onClick={() => handleOpenEdit(product)}
+                        className="btn-secondary btn-sm"
+                        title="Edit product"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product)}
+                        disabled={deletingProductId === product.id}
+                        className="btn-danger-outline btn-sm"
+                        title="Remove product"
+                      >
+                        {deletingProductId === product.id ? "..." : "🗑️"}
+                      </button>
+                      <button
                         onClick={() => handleGoLive(product.id)}
-                        disabled={startingLiveId === product.id || product.stock < 1}
+                        disabled={startingLiveId === product.id || product.stock < 1 || product.status === "archived"}
                         className="btn-primary btn-sm btn-golive"
                       >
                         {startingLiveId === product.id ? "..." : "🔴 Go Live"}
@@ -339,6 +488,14 @@ function SellerDashboard() {
           </section>
         </div>
       </main>
+
+      {/* Edit Product Modal */}
+      <EditProductModal
+        product={editingProduct}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onProductUpdated={handleProductUpdated}
+      />
     </div>
   );
 }

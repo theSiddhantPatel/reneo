@@ -72,6 +72,7 @@ function LiveSession() {
 
   // Live Floating Emoji Reactions State
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
+  const [isReactionsFolded, setIsReactionsFolded] = useState(false);
 
   // Product Switcher State (Multi-Product Showcase - Part B)
   const [isProductSwitcherOpen, setIsProductSwitcherOpen] = useState(false);
@@ -1285,54 +1286,80 @@ function LiveSession() {
                 ))}
               </div>
 
-              {/* Quick Reactions Bar (Customer Only) */}
+              {/* Foldable Quick Reactions Bar (Customer Only) */}
               {profile?.role === "customer" && session.status === "live" && (
-                <div className="live-reactions-bar">
-                  <button
-                    type="button"
-                    onClick={() => triggerReaction("❤️")}
-                    className="btn-reaction"
-                    title="Send Heart (Love)"
-                    aria-label="Send Heart reaction"
-                  >
-                    ❤️
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => triggerReaction("🔥")}
-                    className="btn-reaction"
-                    title="Send Fire (Hyped)"
-                    aria-label="Send Fire reaction"
-                  >
-                    🔥
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => triggerReaction("👏")}
-                    className="btn-reaction"
-                    title="Send Clap (Applause)"
-                    aria-label="Send Clap reaction"
-                  >
-                    👏
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => triggerReaction("🚀")}
-                    className="btn-reaction"
-                    title="Send Rocket (Awesome)"
-                    aria-label="Send Rocket reaction"
-                  >
-                    🚀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => triggerReaction("🛍️")}
-                    className="btn-reaction"
-                    title="Send Shopping (Buy)"
-                    aria-label="Send Shopping reaction"
-                  >
-                    🛍️
-                  </button>
+                <div className="live-reactions-wrapper">
+                  {isReactionsFolded ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsReactionsFolded(false)}
+                      className="btn-reactions-fold-toggle"
+                      title="Expand live emoji reactions"
+                      aria-label="Expand emoji reactions"
+                    >
+                      <span className="reaction-fold-icon">❤️</span>
+                      <span>React</span>
+                    </button>
+                  ) : (
+                    <div className="live-reactions-bar">
+                      <div className="reactions-emoji-list">
+                        <button
+                          type="button"
+                          onClick={() => triggerReaction("❤️")}
+                          className="btn-reaction"
+                          title="Send Heart (Love)"
+                          aria-label="Send Heart reaction"
+                        >
+                          ❤️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerReaction("🔥")}
+                          className="btn-reaction"
+                          title="Send Fire (Hyped)"
+                          aria-label="Send Fire reaction"
+                        >
+                          🔥
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerReaction("👏")}
+                          className="btn-reaction"
+                          title="Send Clap (Applause)"
+                          aria-label="Send Clap reaction"
+                        >
+                          👏
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerReaction("🚀")}
+                          className="btn-reaction"
+                          title="Send Rocket (Awesome)"
+                          aria-label="Send Rocket reaction"
+                        >
+                          🚀
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerReaction("🛍️")}
+                          className="btn-reaction"
+                          title="Send Shopping (Buy)"
+                          aria-label="Send Shopping reaction"
+                        >
+                          🛍️
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsReactionsFolded(true)}
+                        className="btn-reaction-fold-close"
+                        title="Fold emoji reactions bar"
+                        aria-label="Fold reactions"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1442,13 +1469,13 @@ function LiveSession() {
                 className={`tab-btn ${activeMobileTab === "chat" ? "active" : ""}`}
                 onClick={() => setActiveMobileTab("chat")}
               >
-                💬 Live Chat
+                💬 Chat {messages.length > 0 ? `(${messages.length})` : ""}
               </button>
               <button
                 className={`tab-btn ${activeMobileTab === "product" ? "active" : ""}`}
                 onClick={() => setActiveMobileTab("product")}
               >
-                🛍️ Featured Product
+                🛍️ Product
               </button>
               {profile?.role === "customer" && (
                 <button
@@ -1658,23 +1685,38 @@ function LiveSession() {
                 <div ref={chatBottomRef} />
               </div>
 
-              {session.status === "live" ? (
+              {session?.status === "live" ? (
                 <form onSubmit={sendMessage} className="chat-input-form">
                   <input
                     type="text"
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+                      }, 300);
+                    }}
                     placeholder="Type a message..."
                     className="chat-input"
                     maxLength={500}
+                    autoComplete="off"
                   />
-                  <button type="submit" className="btn-primary btn-sm chat-send-btn">
-                    Send
+                  <button
+                    type="submit"
+                    disabled={!messageText.trim()}
+                    className="btn-primary chat-send-btn"
+                    title="Send Message"
+                    aria-label="Send Message"
+                  >
+                    <span>Send</span>
+                    <span className="send-icon-arrow">➤</span>
                   </button>
                 </form>
               ) : (
                 <div className="chat-disabled-banner">
-                  Chat is closed for ended streams.
+                  {session?.status === "ended"
+                    ? "Chat is closed for ended streams."
+                    : "Live chat will activate once broadcast starts."}
                 </div>
               )}
             </div>

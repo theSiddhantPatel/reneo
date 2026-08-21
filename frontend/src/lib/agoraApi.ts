@@ -1,6 +1,5 @@
 import { supabase } from "./supabase";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+import { getBackendUrl } from "./config";
 
 type AgoraTokenResponse = {
     token: string;
@@ -28,8 +27,9 @@ export async function getAgoraToken(
         throw new Error("User is not authenticated");
     }
 
+    const backendUrl = getBackendUrl();
     const response = await fetch(
-        `${BACKEND_URL}/api/agora/token`,
+        `${backendUrl}/api/agora/token`,
         {
             method: "POST",
             headers: {
@@ -39,7 +39,6 @@ export async function getAgoraToken(
             body: JSON.stringify({
                 liveId,
                 uid,
-                //we can't send 'role' for security purpose.
             }),
         }
     );

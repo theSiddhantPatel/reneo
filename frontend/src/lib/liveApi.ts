@@ -1,6 +1,5 @@
 import { supabase } from "./supabase";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:4000";
+import { getBackendUrl } from "./config";
 
 async function getAccessToken() {
     const {
@@ -17,8 +16,9 @@ async function getAccessToken() {
 
 export async function startLiveSession(productId: string) {
     const accessToken = await getAccessToken();
+    const backendUrl = getBackendUrl();
 
-    const response = await fetch(`${BACKEND_URL}/api/live`, {
+    const response = await fetch(`${backendUrl}/api/live`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -38,8 +38,9 @@ export async function startLiveSession(productId: string) {
 
 export async function endLiveSession(liveId: string) {
     const accessToken = await getAccessToken();
+    const backendUrl = getBackendUrl();
 
-    const response = await fetch(`${BACKEND_URL}/api/live/${liveId}/end`, {
+    const response = await fetch(`${backendUrl}/api/live/${liveId}/end`, {
         method: "PATCH",
         headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -60,7 +61,8 @@ export function endLiveSessionBeacon(liveId: string) {
     supabase.auth.getSession().then(({ data: { session } }) => {
         if (!session?.access_token) return;
 
-        fetch(`${BACKEND_URL}/api/live/${liveId}/end`, {
+        const backendUrl = getBackendUrl();
+        fetch(`${backendUrl}/api/live/${liveId}/end`, {
             method: "PATCH",
             headers: {
                 Authorization: `Bearer ${session.access_token}`,
@@ -69,4 +71,3 @@ export function endLiveSessionBeacon(liveId: string) {
         }).catch(() => {});
     }).catch(() => {});
 }
-
