@@ -36,17 +36,33 @@ function Signup() {
       });
 
       if (signUpError) {
+        if (
+          signUpError.message.toLowerCase().includes("already registered") ||
+          signUpError.message.toLowerCase().includes("already exists") ||
+          signUpError.message.toLowerCase().includes("user already exists")
+        ) {
+          setError("An account with this email already exists. Please log in.");
+          return;
+        }
         throw signUpError;
       }
 
-      console.log("Signup success:", data);
+      // Supabase returns a user object with empty identities ([]) when the email already exists
+      if (
+        data.user &&
+        Array.isArray(data.user.identities) &&
+        data.user.identities.length === 0
+      ) {
+        setError("An account with this email already exists. Please log in.");
+        return;
+      }
 
       if (data.session) {
         // Auto-login successful
         navigate("/");
       } else {
         setMessage(
-          "Account created! You can now log in (if email confirmation is enabled in Supabase, please verify your email first).",
+          "Account created successfully! You can now log in.",
         );
       }
     } catch (err) {

@@ -193,8 +193,14 @@ The application handles edge cases with clear, actionable user messages:
 3. **Automated End-to-End Tests**: Add Playwright test suites simulating multi-browser live commerce interactions between sellers and audience members.
 
 ### 3. Where did you use a library or an AI assistant to do something you would not have been able to write yourself, and what did you learn afterwards?
-- **Usage**: I leveraged the `agora-token` package and AI assistance to properly configure the `RtcTokenBuilder` privilege bitmasks and map user IDs to Agora integer UIDs safely.
-- **What I Learned**: WebRTC platforms like Agora use numerical UIDs for media channels and separate publisher and subscriber privileges at the cryptographic token layer. Enforcing security requires generating tokens with strict role-based expiration on the backend rather than allowing clients to join channels with open access.
+- **Where I Used an AI Assistant & Libraries**:
+  1. **Agora WebRTC Token Generation (`agora-token`)**: Configuring the `RtcTokenBuilder` privilege bitmasks (`kJoinChannel`, `kPublishAudioTrack`, `kPublishVideoTrack`) and writing a deterministic algorithm to map Supabase UUIDs to Agora numerical integer UIDs.
+  2. **Dual-Layer Real-Time Architecture**: Structuring the hybrid real-time communication pipeline using Supabase Broadcast channels for zero-latency peer delivery (live chat & floating emoji reactions) paired with PostgreSQL Changes for persistent message storage.
+  3. **Project Scaffolding & Mobile UI Ergonomics**: Rapidly structuring the full-stack TypeScript workspace and refining mobile-responsive layouts (handling soft keyboard viewport shifts, preventing iOS 16px input auto-zoom, and touch-friendly controls).
+- **What I Learned Afterwards**:
+  1. **Cryptographic WebRTC Role Segregation**: Agora media security is enforced at the cryptographic token layer on the backend—not the client. Clients cannot upgrade themselves from subscriber to publisher without a backend-signed privilege token.
+  2. **Real-Time Database vs. Broadcast Trade-offs**: Relational databases quickly saturate under high-frequency writes (e.g. hundreds of simultaneous emoji reactions). Ephemeral WebSocket broadcast channels offload database I/O while preserving a 60fps viewer experience.
+  3. **Optimistic UI Synchronization**: Managing optimistic local state updates alongside asynchronous server broadcasts and database persistence ensures an instantaneous user interface while handling network rollbacks gracefully.
 
 ---
 
