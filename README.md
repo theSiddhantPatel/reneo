@@ -174,6 +174,7 @@ The application handles edge cases with clear, actionable user messages:
 - **Camera/Microphone Permission Denied**: Explicit alert instructing the user to enable browser permissions.
 - **No Secondary Camera Found**: Informs the seller if their device lacks multiple camera inputs.
 - **Live Stream Ended**: Automatically closes Agora tracks and presents an informative banner allowing the customer to continue viewing the product and cart.
+- **20-Minute Resource Preservation Limit**: All live streams are strictly capped at 20 minutes (1200 seconds) to conserve Agora/database resources. Includes a live in-stream countdown timer (`⏱️ mm:ss / 20m`) with amber warning (< 5 mins) and pulsing red alerts (< 2 mins), backend cryptographic token expiration caps, and an automatic background sweeper that marks stale sessions as ended in Supabase.
 - **Browser Tab / Window Close**: `beforeunload` beacon sends an asynchronous termination signal (`keepalive: true`) so abandoned streams don't linger.
 - **Agora Connection Failure / Interruption**: Catches network interruptions and offers retry/reconnection indicators.
 - **Invalid Session / Token Expiry**: Redirects to authentication with clear feedback.
@@ -210,9 +211,9 @@ The application handles edge cases with clear, actionable user messages:
 
 | Name | Account (Email) | Password | Role |
 | :--- | :--- | :--- | :--- |
-| **Jessica** | `mp5459544@gmail.com` | `111111` | **Seller** |
-| **Siddhant Patel** | `bxivfk0171@minitts.net` | `111111` | **Customer** |
-| **Sandhya** | `spindia191@gmail.com` | `123@abc` | **Customer** |
+| **Jessica** | `folibog262@ehwit.com` | `Jessica@123` | **Customer** |
+| **Patel** | `patel@allfreemail.net` | `Patel@123` | **Seller** |
+| **Alice** | `spindia191@gmail.com` | `Sandhya` | **Customer** |
 | **David** | `ovfgeo2994@minitts.net` | `111111` | **Seller** |
 | **Minitts** | `ajqnol1993@minitts.net` | `111111` | **Customer** |
 

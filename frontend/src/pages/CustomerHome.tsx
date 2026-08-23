@@ -100,7 +100,15 @@ function CustomerHome() {
         (hostsRes.data ?? []).map((h) => [h.id, h.name]),
       );
 
-      const enrichedSessions: LiveSessionWithProduct[] = sessions.map((s) => ({
+      // Filter out any sessions that have exceeded the 20-minute maximum duration limit
+      const MAX_LIVE_DURATION_MS = 20 * 60 * 1000;
+      const now = Date.now();
+      const activeValidSessions = sessions.filter((s) => {
+        const startTime = new Date(s.created_at).getTime();
+        return now - startTime < MAX_LIVE_DURATION_MS;
+      });
+
+      const enrichedSessions: LiveSessionWithProduct[] = activeValidSessions.map((s) => ({
         ...s,
         products: productsMap.get(s.product_id) ?? null,
         host_name: hostsMap.get(s.host_id) ?? "Seller",

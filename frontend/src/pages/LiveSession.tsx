@@ -97,6 +97,10 @@ function LiveSession() {
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isEndingLive, setIsEndingLive] = useState(false);
 
+  // 20-Minute Live Session Limit State (1200 seconds max to conserve resources)
+  const MAX_LIVE_DURATION_SECONDS = 20 * 60;
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
+
   // Customer Player Controls State
   const [isCustomerVideoOff, setIsCustomerVideoOff] = useState(false);
   const [isCustomerAudioMuted, setIsCustomerAudioMuted] = useState(false);
@@ -423,6 +427,67 @@ function LiveSession() {
       setIsEndingLive(false);
     }
   }
+
+  // Auto-expire live session once 20-minute maximum duration is reached
+  async function handleAutoExpireSession() {
+    if (!liveId) return;
+
+    await cleanupAgora();
+    setSession((prev) =>
+      prev ? { ...prev, status: "ended", ended_at: new Date().toISOString() } : null,
+    );
+
+    if (profile?.role === "seller") {
+      try {
+        await endLiveSession(liveId);
+      } catch {
+        // Silently ignore background auto-end error
+      }
+      setInfo(
+        "⏳ Live stream has reached the 20-minute maximum duration limit and was ended to conserve resources.",
+      );
+      if (liveChannelRef.current) {
+        liveChannelRef.current.send({
+          type: "broadcast",
+          event: "stream_ended",
+          payload: { live_id: liveId, reason: "20_minute_limit" },
+        });
+      }
+    } else {
+      setInfo(
+        "⏳ This live broadcast reached the 20-minute maximum duration limit and has concluded.",
+      );
+    }
+  }
+
+  function formatRemainingTime(totalSeconds: number): string {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }
+
+  // 20-Minute Live Session Expiration Countdown & Auto-Termination
+  useEffect(() => {
+    if (session?.status !== "live" || !session.created_at) {
+      setSecondsRemaining(null);
+      return;
+    }
+
+    const checkExpiration = () => {
+      const startTime = new Date(session.created_at).getTime();
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = Math.max(0, MAX_LIVE_DURATION_SECONDS - elapsed);
+      setSecondsRemaining(remaining);
+
+      if (remaining <= 0) {
+        handleAutoExpireSession();
+      }
+    };
+
+    checkExpiration();
+    const interval = setInterval(checkExpiration, 1000);
+    return () => clearInterval(interval);
+  }, [session?.status, session?.created_at, liveId, profile?.role]);
 
   async function toggleMute() {
     if (!localAudioTrack) {
@@ -1163,6 +1228,20 @@ function LiveSession() {
               <span className={`status-pill ${session.status === "live" ? "status-live" : "status-ended"}`}>
                 {session.status === "live" ? "🔴 LIVE" : "ENDED"}
               </span>
+              {session.status === "live" && secondsRemaining !== null && (
+                <span
+                  className={`session-timer-pill ${
+                    secondsRemaining <= 120
+                      ? "timer-critical"
+                      : secondsRemaining <= 300
+                      ? "timer-warning"
+                      : ""
+                  }`}
+                  title="Stream duration limit: 20 minutes maximum to save resources"
+                >
+                  ⏱️ {formatRemainingTime(secondsRemaining)} / 20m
+                </span>
+              )}
               <span className="viewers-count">
                 👁️ {viewerCount} {viewerCount === 1 ? "viewer" : "viewers"}
               </span>

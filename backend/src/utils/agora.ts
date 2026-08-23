@@ -1,8 +1,7 @@
-import agoraToken from "agora-token"
+import agoraToken from "agora-token";
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
 const appId = process.env.AGORA_APP_ID!;
-// '!' in the last means I assure you that this value is not null;
 const appCertificate = process.env.AGORA_APP_CERTIFICATE!;
 
 if (!appId) {
@@ -13,21 +12,22 @@ if (!appCertificate) {
     throw new Error("AGORA app certificate is missing");
 }
 
+// Global 20-minute maximum live stream duration limit to save resources
+export const MAX_LIVE_DURATION_SECONDS = 20 * 60; // 1200 seconds
+
 export function generateAgoraToken(
     channelName: string,
     uid: number,
-    role: "publisher" | "subscriber"
+    role: "publisher" | "subscriber",
+    expiresInSeconds: number = MAX_LIVE_DURATION_SECONDS
 ) {
     const agoraRole =
         role === "publisher"
             ? RtcRole.PUBLISHER
             : RtcRole.SUBSCRIBER;
 
-    // Token remains valid for 1 hour
-    const tokenExpirationTimeInSeconds = 60 * 60;
-
-    // RTC privileges remain valid for 1 hour
-    const privilegeExpirationInSeconds = 60 * 60;
+    // Strict token lifespan capped to remaining session time (min 10s, max 1200s)
+    const validDurationSeconds = Math.max(10, Math.min(expiresInSeconds, MAX_LIVE_DURATION_SECONDS));
 
     const token = RtcTokenBuilder.buildTokenWithUid(
         appId,
@@ -35,8 +35,8 @@ export function generateAgoraToken(
         channelName,
         uid,
         agoraRole,
-        tokenExpirationTimeInSeconds,
-        privilegeExpirationInSeconds
+        validDurationSeconds,
+        validDurationSeconds
     );
 
     return token;

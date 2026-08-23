@@ -4,7 +4,7 @@ import {
     AuthenticatedRequest,
 } from "../middleware/auth.js";
 import { createAuthenticatedSupabaseClient } from "../config/supabase.js";
-import { generateAgoraToken } from "../utils/agora.js";
+import { generateAgoraToken, MAX_LIVE_DURATION_SECONDS } from "../utils/agora.js";
 
 const agoraRouter = Router();
 
@@ -40,9 +40,6 @@ agoraRouter.post(
                 .select("role")
                 .eq("id", userId)
                 .single();
-            // console.log("user id", userId);
-            // console.log("Profile:", profile);
-            // console.log("Profile error:", profileError);
 
             if (profileError || !profile) {
                 return res.status(404).json({
@@ -50,10 +47,10 @@ agoraRouter.post(
                 });
             }
 
-            // Get the requested live session
+            // Get the requested live session with created_at timestamp
             const { data: live, error: liveError } = await authenticatedSupabase
                 .from("live_sessions")
-                .select("live_id, host_id, status")
+                .select("live_id, host_id, status, created_at")
                 .eq("live_id", liveId)
                 .single();
 
@@ -63,16 +60,33 @@ agoraRouter.post(
                 });
             }
 
-            // Do not issue tokens for ended lives
-            if (live.status === "ended") {
+            // Calculate elapsed time from stream start
+            const streamStartTime = new Date(live.created_at).getTime();
+            const elapsedSeconds = Math.floor((Date.now() - streamStartTime) / 1000);
+            const remainingSeconds = MAX_LIVE_DURATION_SECONDS - elapsedSeconds;
+
+            // Enforce 20-minute maximum duration limit
+            if (live.status === "ended" || remainingSeconds <= 0) {
+                if (live.status !== "ended") {
+                    // Auto-end the live session in database if 20 mins passed
+                    await authenticatedSupabase
+                        .from("live_sessions")
+                        .update({
+                            status: "ended",
+                            ended_at: new Date().toISOString(),
+                        })
+                        .eq("live_id", liveId);
+                }
+
                 return res.status(410).json({
-                    message: "This live session has already ended",
+                    message: "This live session has exceeded the 20-minute maximum duration limit and is now ended.",
+                    sessionEnded: true,
                 });
             }
 
             let role: "publisher" | "subscriber";
-            // Seller can only publish to their own live session
 
+            // Seller can only publish to their own live session
             if (profile.role === "seller") {
                 if (live.host_id !== userId) {
                     return res.status(403).json({
@@ -89,10 +103,12 @@ agoraRouter.post(
                 });
             }
 
+            // Generate cryptographic Agora token with lifespan capped to remaining time
             const token = generateAgoraToken(
                 live.live_id,
                 uid,
-                role
+                role,
+                remainingSeconds
             );
 
             return res.status(200).json({
@@ -101,10 +117,10 @@ agoraRouter.post(
                 channelName: live.live_id,
                 uid,
                 role,
+                maxDurationSeconds: MAX_LIVE_DURATION_SECONDS,
+                remainingSeconds,
             });
         } catch (error) {
-            //console.error("Agora token generation failed:", error);
-
             return res.status(500).json({
                 message: "Failed to generate Agora token",
             });
@@ -112,4 +128,4 @@ agoraRouter.post(
     }
 );
 
-export default agoraRouter; 
+export default agoraRouter;
