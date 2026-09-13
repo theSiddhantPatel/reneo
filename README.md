@@ -81,7 +81,7 @@ A production-ready live-commerce platform slice built for solo entrepreneurs. A 
 ### 1. Repository Setup & Dependencies
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/theSiddhantPatel/reneo.git
 cd reneo
 
 # Install backend dependencies
