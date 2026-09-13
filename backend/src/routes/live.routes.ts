@@ -180,4 +180,91 @@ liveRouter.patch(
     }
 );
 
+// Delete product permanently with authenticated cascade cleanup
+liveRouter.delete(
+    "/product/:productId",
+    authenticateUser,
+    async (req: AuthenticatedRequest, res: Response) => {
+        try {
+            const userId = req.user!.id;
+            const accessToken = req.accessToken!;
+            const { productId } = req.params;
+
+            const authenticatedSupabase = createAuthenticatedSupabaseClient(accessToken);
+
+            // 1. Verify product exists and belongs to requesting seller
+            const { data: product, error: findError } = await authenticatedSupabase
+                .from("products")
+                .select("id, seller_id, image_url, name")
+                .eq("id", productId)
+                .single();
+
+            if (findError || !product) {
+                return res.status(404).json({ message: "Product not found" });
+            }
+
+            if (product.seller_id !== userId) {
+                return res.status(403).json({ message: "You do not own this product" });
+            }
+
+            // 2. Clean up live messages and sessions for this product created by the seller
+            const { data: sessions } = await authenticatedSupabase
+                .from("live_sessions")
+                .select("live_id")
+                .eq("product_id", productId)
+                .eq("host_id", userId);
+
+            if (sessions && sessions.length > 0) {
+                const sessionIds = sessions.map((s) => s.live_id);
+                await authenticatedSupabase.from("live_messages").delete().in("live_id", sessionIds);
+                await authenticatedSupabase.from("live_sessions").delete().eq("product_id", productId).eq("host_id", userId);
+            }
+
+            // 3. Delete product permanently from database
+            let { error: deleteError } = await authenticatedSupabase
+                .from("products")
+                .delete()
+                .eq("id", productId)
+                .eq("seller_id", userId);
+
+            // If foreign key constraint still blocks hard delete, mark as archived
+            if (deleteError) {
+                console.warn("Hard delete constrained by foreign keys, archiving product:", deleteError.message);
+                const { error: archiveError } = await authenticatedSupabase
+                    .from("products")
+                    .update({ status: "archived" })
+                    .eq("id", productId)
+                    .eq("seller_id", userId);
+
+                if (archiveError) {
+                    throw archiveError;
+                }
+            }
+
+            // 4. Clean up storage image if present
+            if (product.image_url && product.image_url.includes("product-images")) {
+                try {
+                    const urlParts = product.image_url.split("/product-images/");
+                    if (urlParts.length > 1) {
+                        const storagePath = decodeURIComponent(urlParts[1]);
+                        await authenticatedSupabase.storage.from("product-images").remove([storagePath]);
+                    }
+                } catch {
+                    // Ignore storage deletion error
+                }
+            }
+
+            return res.status(200).json({
+                message: `Product "${product.name}" deleted successfully`,
+                productId,
+            });
+        } catch (error) {
+            console.error("Delete product error:", error);
+            return res.status(500).json({
+                message: error instanceof Error ? error.message : "Failed to delete product",
+            });
+        }
+    }
+);
+
 export default liveRouter;

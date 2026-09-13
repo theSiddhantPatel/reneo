@@ -68,6 +68,26 @@ export function endLiveSessionBeacon(liveId: string) {
                 Authorization: `Bearer ${session.access_token}`,
             },
             keepalive: true,
-        }).catch(() => {});
-    }).catch(() => {});
+        }).catch(() => { });
+    }).catch(() => { });
+}
+
+export async function deleteProductApi(productId: string) {
+    const accessToken = await getAccessToken();
+    const backendUrl = getBackendUrl();
+
+    const response = await fetch(`${backendUrl}/api/live/product/${productId}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+        },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || "Failed to delete product from database");
+    }
+
+    return data;
 }

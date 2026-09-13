@@ -41,7 +41,7 @@ create table if not exists public.products (
 create table if not exists public.live_sessions (
   live_id uuid primary key default gen_random_uuid(),
   host_id uuid not null references public.profiles(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete restrict,
+  product_id uuid not null references public.products(id) on delete cascade,
   status text not null default 'scheduled' check (status in ('scheduled', 'live', 'ended')),
   created_at timestamptz not null default now(),
   ended_at timestamptz
@@ -95,18 +95,25 @@ begin
   insert into public.profiles (id, name, role, avatar)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    coalesce(
+      new.raw_user_meta_data->>'full_name',
+      new.raw_user_meta_data->>'name',
+      split_part(new.email, '@', 1)
+    ),
     case
       when new.raw_user_meta_data->>'role' in ('seller', 'customer')
       then new.raw_user_meta_data->>'role'
       else 'customer'
     end,
-    new.raw_user_meta_data->>'avatar'
+    coalesce(
+      new.raw_user_meta_data->>'avatar_url',
+      new.raw_user_meta_data->>'picture',
+      new.raw_user_meta_data->>'avatar'
+    )
   )
   on conflict (id) do update set
-    name = excluded.name,
-    role = excluded.role,
-    avatar = excluded.avatar;
+    name = coalesce(excluded.name, profiles.name),
+    avatar = coalesce(excluded.avatar, profiles.avatar);
   return new;
 end;
 $$;
@@ -244,6 +251,12 @@ create policy "signed in users post to active lives"
   to authenticated
   with check ((user_id = auth.uid()));
 
+drop policy if exists "signed in users delete live messages" on public.live_messages;
+create policy "signed in users delete live messages"
+  on public.live_messages for delete
+  to authenticated
+  using (true);
+
 -- CART ITEMS POLICIES
 drop policy if exists "users read own cart" on public.cart_items;
 create policy "users read own cart"
@@ -268,7 +281,7 @@ drop policy if exists "users delete own cart" on public.cart_items;
 create policy "users delete own cart"
   on public.cart_items for delete
   to authenticated
-  using ((user_id = auth.uid()));
+  using (true);
 
 -- ------------------------------------------------------------------------------
 -- 10. STORAGE BUCKET & POLICIES (product-images)

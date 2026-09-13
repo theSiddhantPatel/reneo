@@ -213,7 +213,7 @@ The application handles edge cases with clear, actionable user messages:
 | :--- | :--- | :--- | :--- |
 | **Jessica** | `folibog262@ehwit.com` | `Jessica@123` | **Customer** |
 | **Patel** | `patel@allfreemail.net` | `Patel@123` | **Seller** |
-| **Alice** | `spindia191@gmail.com` | `Sandhya` | **Customer** |
+| **Mihawk** | `MiHawk@SolarNyx.com` | `MiHawk@123` | **Customer** |
 | **David** | `ovfgeo2994@minitts.net` | `111111` | **Seller** |
 | **Minitts** | `ajqnol1993@minitts.net` | `111111` | **Customer** |
 

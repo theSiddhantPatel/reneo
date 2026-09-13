@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
+import SignInWithGoogle from "../components/SignInWithGoogle";
 
 function Login() {
   const navigate = useNavigate();
@@ -81,10 +82,17 @@ function Login() {
 
           {error && <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>}
 
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+
+          <SignInWithGoogle onError={(msg) => setError(msg)} />
+
           <p className="auth-footer">
             Don't have an account? <Link to="/signup">Create account</Link>
           </p>
         </div>
+
       </div>
     </div>
   );

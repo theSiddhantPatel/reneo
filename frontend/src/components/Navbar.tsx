@@ -52,7 +52,29 @@ export default function Navbar() {
 
           {user && profile && (
             <div className="navbar-user">
-              <div className="user-meta-pill">
+              <div className="user-meta-pill" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <img
+                  src={
+                    profile.avatar ||
+                    `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(
+                      profile.name || "user"
+                    )}`
+                  }
+                  alt={profile.name}
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "1.5px solid #6366f1",
+                    backgroundColor: "#1e1e2e",
+                  }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(
+                      profile.name || "user"
+                    )}`;
+                  }}
+                />
                 <span className="navbar-username">{profile.name}</span>
                 <span className={`role-badge role-${profile.role}`}>
                   {profile.role.toUpperCase()}

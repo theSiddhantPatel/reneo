@@ -7,7 +7,7 @@ import CreateProductForm from "../components/CreateProductForm";
 import EditProductModal from "../components/EditProductModal";
 import StockAdjuster from "../components/StockAdjuster";
 import Navbar from "../components/Navbar";
-import { startLiveSession } from "../lib/liveApi";
+import { startLiveSession, deleteProductApi } from "../lib/liveApi";
 
 function SellerDashboard() {
   const { profile, user } = useAuth();
@@ -89,7 +89,7 @@ function SellerDashboard() {
 
   const handleDeleteProduct = async (product: Product) => {
     const confirmed = window.confirm(
-      `Are you sure you want to remove "${product.name}"?\nThis action cannot be undone.`
+      `Are you sure you want to permanently delete "${product.name}"?\nThis will remove it from the database and inventory.`
     );
     if (!confirmed) return;
 
@@ -98,48 +98,20 @@ function SellerDashboard() {
     setActionSuccess("");
 
     try {
-      const { error: deleteErr } = await supabase
+      // 1. Direct delete from Supabase products table
+      const { error: directErr } = await supabase
         .from("products")
         .delete()
-        .eq("id", product.id);
+        .eq("id", product.id)
+        .select();
 
-      if (deleteErr) {
-        // If product is referenced in past live sessions, offer archival
-        if (
-          deleteErr.message.includes("violates foreign key constraint") ||
-          (deleteErr as any).code === "23503"
-        ) {
-          const archiveConfirm = window.confirm(
-            `"${product.name}" has been featured in past live broadcast records and cannot be permanently deleted.\n\nWould you like to Archive it instead so it is hidden from future live streams?`
-          );
-          if (archiveConfirm) {
-            const { error: archiveErr } = await supabase
-              .from("products")
-              .update({ status: "archived" })
-              .eq("id", product.id);
-
-            if (archiveErr) throw archiveErr;
-
-            setProducts((prev) =>
-              prev.map((p) =>
-                p.id === product.id ? { ...p, status: "archived" } : p
-              )
-            );
-            setActionSuccess(`Archived "${product.name}".`);
-            setTimeout(() => setActionSuccess(""), 4000);
-            return;
-          }
-          return;
-        }
-        throw deleteErr;
+      if (directErr) {
+        console.warn("Direct Supabase delete failed, attempting backend cascade endpoint:", directErr);
+        // Fallback to backend cascade API endpoint
+        await deleteProductApi(product.id);
       }
 
-      // Optimistically remove from state
-      setProducts((prev) => prev.filter((p) => p.id !== product.id));
-      setActionSuccess(`Removed "${product.name}".`);
-      setTimeout(() => setActionSuccess(""), 4000);
-
-      // Clean up uploaded image if in product-images storage
+      // 2. Clean up uploaded image in product-images storage if applicable
       if (product.image_url && product.image_url.includes("product-images")) {
         try {
           const urlParts = product.image_url.split("/product-images/");
@@ -151,10 +123,15 @@ function SellerDashboard() {
           // Ignore background storage cleanup error
         }
       }
+
+      // 3. Immediately re-fetch real database inventory from Supabase
+      await fetchProducts();
+      setActionSuccess(`Deleted "${product.name}" permanently from database.`);
+      setTimeout(() => setActionSuccess(""), 4000);
     } catch (err) {
       console.error("Failed to delete product:", err);
       setActionError(
-        err instanceof Error ? err.message : "Failed to delete product."
+        err instanceof Error ? err.message : "Failed to delete product from database."
       );
     } finally {
       setDeletingProductId(null);
@@ -170,6 +147,7 @@ function SellerDashboard() {
       .from("products")
       .select("*")
       .eq("seller_id", profile.id)
+      .neq("status", "archived")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -189,6 +167,8 @@ function SellerDashboard() {
 
   // Filtered and Folded Products
   const filteredProducts = products.filter((product) => {
+    if (product.status === "archived") return false;
+
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.description &&
